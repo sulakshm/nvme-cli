@@ -5,6 +5,8 @@ a.out
 *~
 *.swp
 NVME-VERSION-FILE
+*.a
+*.so.*
 
 cscope.*
 

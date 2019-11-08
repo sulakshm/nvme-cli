@@ -4,11 +4,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "linux/nvme_ioctl.h"
-
 #include "nvme.h"
 #include "nvme-print.h"
-#include "nvme-ioctl.h"
 #include "plugin.h"
 
 #include "argconfig.h"

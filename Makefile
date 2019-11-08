@@ -15,6 +15,7 @@ SYSTEMDDIR ?= $(LIBDIR)/systemd
 UDEVDIR ?= $(SYSCONFDIR)/udev
 DRACUTDIR ?= $(LIBDIR)/dracut
 LIB_DEPENDS =
+LDFLAGS = -Llib -lnvme
 
 ifeq ($(LIBUUID),0)
 	override LDFLAGS += -luuid
@@ -50,8 +51,7 @@ override CFLAGS += -DNVME_VERSION='"$(NVME_VERSION)"'
 
 NVME_DPKG_VERSION=1~`lsb_release -sc`
 
-OBJS := nvme-print.o nvme-ioctl.o \
-	nvme-lightnvm.o fabrics.o nvme-models.o plugin.o \
+OBJS := nvme-print.o nvme-lightnvm.o fabrics.o nvme-models.o plugin.o \
 	nvme-status.o nvme-filters.o nvme-topology.o
 
 UTIL_OBJS := util/argconfig.o util/suffix.o util/json.o util/parser.o
@@ -70,19 +70,22 @@ PLUGIN_OBJS :=					\
 	plugins/virtium/virtium-nvme.o		\
 	plugins/shannon/shannon-nvme.o
 
-nvme: nvme.c nvme.h $(OBJS) $(PLUGIN_OBJS) $(UTIL_OBJS) NVME-VERSION-FILE
+nvme: nvme.c nvme.h $(OBJS) $(PLUGIN_OBJS) $(UTIL_OBJS) NVME-VERSION-FILE libnvme
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(INC) nvme.c -o $(NVME) $(OBJS) $(PLUGIN_OBJS) $(UTIL_OBJS) $(LDFLAGS)
+
+libnvme:
+	@$(MAKE) -C lib/
 
 verify-no-dep: nvme.c nvme.h $(OBJS) NVME-VERSION-FILE
 	$(CC) $(CPPFLAGS) $(CFLAGS) nvme.c -o $@ $(OBJS) $(LDFLAGS)
 
-nvme.o: nvme.c nvme.h nvme-print.h nvme-ioctl.h util/argconfig.h util/suffix.h nvme-lightnvm.h fabrics.h
+nvme.o: nvme.c nvme.h nvme-print.h util/argconfig.h util/suffix.h nvme-lightnvm.h fabrics.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(INC) -c $<
 
-%.o: %.c %.h nvme.h linux/nvme.h linux/nvme_ioctl.h nvme-ioctl.h nvme-print.h util/argconfig.h
+%.o: %.c %.h nvme.h nvme-print.h util/argconfig.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(INC) -o $@ -c $<
 
-%.o: %.c nvme.h linux/nvme.h linux/nvme_ioctl.h nvme-ioctl.h nvme-print.h util/argconfig.h
+%.o: %.c nvme.h nvme-print.h util/argconfig.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(INC) -o $@ -c $<
 
 doc: $(NVME)
@@ -96,11 +99,15 @@ all: doc
 clean:
 	$(RM) $(NVME) $(OBJS) $(PLUGIN_OBJS) $(UTIL_OBJS) *~ a.out NVME-VERSION-FILE *.tar* nvme.spec version control nvme-*.deb
 	$(MAKE) -C Documentation clean
+	$(MAKE) -C lib clean
 	$(RM) tests/*.pyc
 	$(RM) verify-no-dep
 
 clobber: clean
 	$(MAKE) -C Documentation clobber
+
+install-lib:
+	$(MAKE) -C lib install
 
 install-man:
 	$(MAKE) -C Documentation install-no-build
@@ -145,7 +152,7 @@ install-etc:
 		$(INSTALL) -m 644 -T ./etc/discovery.conf.in $(DESTDIR)$(SYSCONFDIR)/nvme/discovery.conf; \
 	fi
 
-install-spec: install-bin install-man install-bash-completion install-zsh-completion install-etc install-systemd install-udev install-dracut
+install-spec: install-bin install-man install-lib install-bash-completion install-zsh-completion install-etc install-systemd install-udev install-dracut
 install: install-spec install-hostparams
 
 nvme.spec: nvme.spec.in NVME-VERSION-FILE
@@ -217,3 +224,4 @@ rpm: dist
 
 .PHONY: default doc all clean clobber install-man install-bin install
 .PHONY: dist pkg dist-orig deb deb-light rpm FORCE test
+.PHONY: libnvme

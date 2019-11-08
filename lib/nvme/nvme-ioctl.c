@@ -99,11 +99,11 @@ int nvme_submit_io_passthru(int fd, struct nvme_passthru_cmd *cmd)
 }
 
 int nvme_passthru(int fd, unsigned long ioctl_cmd, __u8 opcode,
-		  __u8 flags, __u16 rsvd,
-		  __u32 nsid, __u32 cdw2, __u32 cdw3, __u32 cdw10, __u32 cdw11,
-		  __u32 cdw12, __u32 cdw13, __u32 cdw14, __u32 cdw15,
-		  __u32 data_len, void *data, __u32 metadata_len,
-		  void *metadata, __u32 timeout_ms, __u32 *result)
+		  __u8 flags, __u16 rsvd, __u32 nsid, __u32 cdw2, __u32 cdw3,
+		  __u32 cdw10, __u32 cdw11, __u32 cdw12, __u32 cdw13,
+		  __u32 cdw14, __u32 cdw15, __u32 data_len, void *data,
+		  __u32 metadata_len, void *metadata, __u32 timeout_ms,
+		  __u32 *result)
 {
 	struct nvme_passthru_cmd cmd = {
 		.opcode		= opcode,
@@ -192,18 +192,6 @@ int nvme_verify(int fd, __u32 nsid, __u64 slba, __u16 nblocks,
 	};
 
 	return nvme_submit_io_passthru(fd, &cmd);
-}
-
-int nvme_passthru_io(int fd, __u8 opcode, __u8 flags, __u16 rsvd,
-		     __u32 nsid, __u32 cdw2, __u32 cdw3, __u32 cdw10,
-		     __u32 cdw11, __u32 cdw12, __u32 cdw13, __u32 cdw14,
-		     __u32 cdw15, __u32 data_len, void *data,
-		     __u32 metadata_len, void *metadata, __u32 timeout_ms)
-{
-	return nvme_passthru(fd, NVME_IOCTL_IO_CMD, opcode, flags, rsvd, nsid,
-			     cdw2, cdw3, cdw10, cdw11, cdw12, cdw13, cdw14,
-			     cdw15, data_len, data, metadata_len, metadata,
-			     timeout_ms, NULL);
 }
 
 int nvme_write_zeros(int fd, __u32 nsid, __u64 slba, __u16 nlb,
@@ -328,14 +316,15 @@ int nvme_resv_release(int fd, __u32 nsid, __u8 rtype, __u8 rrela,
 	return nvme_submit_io_passthru(fd, &cmd);
 }
 
-int nvme_resv_report(int fd, __u32 nsid, __u32 numd, __u32 cdw11, void *data)
+int nvme_resv_report(int fd, __u32 nsid, __u32 numd, __u32 cdw11,
+	struct nvme_reservation_status *report)
 {
 	struct nvme_passthru_cmd cmd = {
 		.opcode		= nvme_cmd_resv_report,
 		.nsid		= nsid,
 		.cdw10		= numd,
 		.cdw11		= cdw11,
-		.addr		= (__u64)(uintptr_t) data,
+		.addr		= (__u64)(uintptr_t)report,
 		.data_len	= (numd + 1) << 2,
 	};
 
@@ -361,57 +350,62 @@ int nvme_identify(int fd, __u32 nsid, __u32 cdw10, void *data)
 	return nvme_identify13(fd, nsid, cdw10, 0, data);
 }
 
-int nvme_identify_ctrl(int fd, void *data)
+int nvme_identify_ctrl(int fd, struct nvme_id_ctrl *id)
 {
-	memset(data, 0, sizeof(struct nvme_id_ctrl));
-	return nvme_identify(fd, 0, 1, data);
+	return nvme_identify(fd, 0, 1, id);
 }
 
-int nvme_identify_ns(int fd, __u32 nsid, bool present, void *data)
+int nvme_identify_ns(int fd, __u32 nsid, bool present, struct nvme_id_ns *ns)
 {
 	int cns = present ? NVME_ID_CNS_NS_PRESENT : NVME_ID_CNS_NS;
 
-	return nvme_identify(fd, nsid, cns, data);
+	return nvme_identify(fd, nsid, cns, ns);
 }
 
-int nvme_identify_ns_list(int fd, __u32 nsid, bool all, void *data)
+int nvme_identify_ns_list(int fd, __u32 nsid, bool all,
+			  struct nvme_ns_list *ns_list)
 {
 	int cns = all ? NVME_ID_CNS_NS_PRESENT_LIST : NVME_ID_CNS_NS_ACTIVE_LIST;
 
-	return nvme_identify(fd, nsid, cns, data);
+	return nvme_identify(fd, nsid, cns, ns_list);
 }
 
-int nvme_identify_ctrl_list(int fd, __u32 nsid, __u16 cntid, void *data)
+int nvme_identify_ctrl_list(int fd, __u32 nsid, __u16 cntid,
+			    struct nvme_controller_list *cntlist)
 {
 	int cns = nsid ? NVME_ID_CNS_CTRL_NS_LIST : NVME_ID_CNS_CTRL_LIST;
 
-	return nvme_identify(fd, nsid, (cntid << 16) | cns, data);
+	return nvme_identify(fd, nsid, (cntid << 16) | cns, cntlist);
 }
 
-int nvme_identify_secondary_ctrl_list(int fd, __u32 nsid, __u16 cntid, void *data)
+int nvme_identify_secondary_ctrl_list(int fd, __u32 nsid, __u16 cntid,
+			struct nvme_secondary_controllers_list *sc_list)
 {
-	return nvme_identify(fd, nsid, (cntid << 16) | NVME_ID_CNS_SCNDRY_CTRL_LIST, data);
+	return nvme_identify(fd, nsid,
+				(cntid << 16) | NVME_ID_CNS_SCNDRY_CTRL_LIST,
+				sc_list);
 }
 
-int nvme_identify_ns_descs(int fd, __u32 nsid, void *data)
+int nvme_identify_ns_descs(int fd, __u32 nsid, struct nvme_ns_id_desc *descs)
 {
 
-	return nvme_identify(fd, nsid, NVME_ID_CNS_NS_DESC_LIST, data);
+	return nvme_identify(fd, nsid, NVME_ID_CNS_NS_DESC_LIST, descs);
 }
 
-int nvme_identify_nvmset(int fd, __u16 nvmset_id, void *data)
+int nvme_identify_nvmset(int fd, __u16 nvmset_id, struct nvme_id_nvmset *nvmset)
 {
-	return nvme_identify13(fd, 0, NVME_ID_CNS_NVMSET_LIST, nvmset_id, data);
+	return nvme_identify13(fd, 0, NVME_ID_CNS_NVMSET_LIST, nvmset_id, nvmset);
 }
 
-int nvme_identify_ns_granularity(int fd, void *data)
+int nvme_identify_ns_granularity(int fd,
+	struct nvme_id_ns_granularity_list *gr_list)
 {
-	return nvme_identify13(fd, 0, NVME_ID_CNS_NS_GRANULARITY, 0, data);
+	return nvme_identify13(fd, 0, NVME_ID_CNS_NS_GRANULARITY, 0, gr_list);
 }
 
-int nvme_identify_uuid(int fd, void *data)
+int nvme_identify_uuid(int fd, struct nvme_id_uuid_list *uuid_list)
 {
-	return nvme_identify(fd, 0, NVME_ID_CNS_UUID_LIST, data);
+	return nvme_identify(fd, 0, NVME_ID_CNS_UUID_LIST, uuid_list);
 }
 
 int nvme_get_log14(int fd, __u32 nsid, __u8 log_id, __u8 lsp, __u64 lpo,
@@ -473,21 +467,21 @@ int nvme_get_log(int fd, __u32 nsid, __u8 log_id, bool rae,
 	return 0;
 }
 
-int nvme_get_telemetry_log(int fd, void *lp, int generate_report,
-			   int ctrl_init, size_t log_page_size, __u64 offset)
+int nvme_get_telemetry_log(int fd, bool gen_report, bool ctrl_init,
+			   __u64 offset, size_t data_len, void *data)
 {
 	if (ctrl_init)
 		return nvme_get_log13(fd, NVME_NSID_ALL, NVME_LOG_TELEMETRY_CTRL,
 				      NVME_NO_LOG_LSP, offset,
-				      0, 1, log_page_size, lp);
-	if (generate_report)
+				      0, 1, data_len, data);
+	else if (gen_report)
 		return nvme_get_log13(fd, NVME_NSID_ALL, NVME_LOG_TELEMETRY_HOST,
 				      NVME_TELEM_LSP_CREATE, offset,
-				      0, 1, log_page_size, lp);
+				      0, 1, data_len, data);
 	else
 		return nvme_get_log13(fd, NVME_NSID_ALL, NVME_LOG_TELEMETRY_HOST,
 				      NVME_NO_LOG_LSP, offset,
-				      0, 1, log_page_size, lp);
+				      0, 1, data_len, data);
 }
 
 int nvme_fw_log(int fd, struct nvme_firmware_log_page *fw_log)
@@ -496,11 +490,10 @@ int nvme_fw_log(int fd, struct nvme_firmware_log_page *fw_log)
 			sizeof(*fw_log), fw_log);
 }
 
-int nvme_changed_ns_list_log(int fd, struct nvme_changed_ns_list_log *changed_ns_list_log)
+int nvme_changed_ns_list_log(int fd, struct nvme_changed_ns_list_log *ns_list)
 {
-	return nvme_get_log(fd, 0, NVME_LOG_CHANGED_NS, true,
-			sizeof(changed_ns_list_log->log),
-			changed_ns_list_log->log);
+	return nvme_get_log(fd, 0, NVME_LOG_CHANGED_NS, true, sizeof(*ns_list),
+				&ns_list);
 }
 
 int nvme_error_log(int fd, int entries, struct nvme_error_log_page *err_log)
@@ -521,10 +514,11 @@ int nvme_smart_log(int fd, __u32 nsid, struct nvme_smart_log *smart_log)
 			sizeof(*smart_log), smart_log);
 }
 
-int nvme_ana_log(int fd, void *ana_log, size_t ana_log_len, int rgo)
+int nvme_ana_log(int fd, int rgo, size_t log_len,
+	struct nvme_ana_group_desc *ana_log)
 {
 	return nvme_get_log13(fd, NVME_NSID_ALL, NVME_LOG_ANA, rgo, 0, 0,
-			true, ana_log_len, ana_log);
+			true, log_len, ana_log);
 }
 
 int nvme_self_test_log(int fd, __u32 nsid, struct nvme_self_test_log *self_test_log)
@@ -550,7 +544,7 @@ int nvme_sanitize_log(int fd, struct nvme_sanitize_log_page *sanitize_log)
 			sizeof(*sanitize_log), sanitize_log);
 }
 
-int nvme_feature(int fd, __u8 opcode, __u32 nsid, __u32 cdw10, __u32 cdw11,
+static int nvme_feature(int fd, __u8 opcode, __u32 nsid, __u32 cdw10, __u32 cdw11,
 		 __u32 cdw12, __u32 data_len, void *data, __u32 *result)
 {
 	struct nvme_admin_cmd cmd = {
@@ -593,40 +587,6 @@ int nvme_get_property(int fd, int offset, uint64_t *value)
 	err = nvme_submit_admin_passthru(fd, &cmd);
 	if (!err && value)
 		*value = cmd.result;
-	return err;
-}
-
-int nvme_get_properties(int fd, void **pbar)
-{
-	int offset;
-	uint64_t value;
-	int err, size = getpagesize();
-
-	*pbar = malloc(size);
-	if (!*pbar) {
-		fprintf(stderr, "malloc: %s\n", strerror(errno));
-		return -ENOMEM;
-	}
-
-	memset(*pbar, 0xff, size);
-	for (offset = NVME_REG_CAP; offset <= NVME_REG_CMBSZ;) {
-		err = nvme_get_property(fd, offset, &value);
-		if (err > 0 && (err & 0xff) == NVME_SC_INVALID_FIELD) {
-			err = 0;
-			value = -1;
-		} else if (err) {
-			free(*pbar);
-			break;
-		}
-		if (is_64bit_reg(offset)) {
-			*(uint64_t *)(*pbar + offset) = value;
-			offset += 8;
-		} else {
-			*(uint32_t *)(*pbar + offset) = value;
-			offset += 4;
-		}
-	}
-
 	return err;
 }
 
@@ -705,8 +665,8 @@ int nvme_ns_delete(int fd, __u32 nsid, __u32 timeout)
 	return nvme_submit_admin_passthru(fd, &cmd);
 }
 
-int nvme_ns_attachment(int fd, __u32 nsid, __u16 num_ctrls, __u16 *ctrlist,
-		       bool attach)
+static int nvme_ns_attachment(int fd, __u32 nsid, __u16 num_ctrls,
+			      __u16 *ctrlist, bool attach)
 {
 	struct nvme_controller_list cntlist = {
 		.num = cpu_to_le16(num_ctrls),
@@ -799,11 +759,11 @@ int nvme_sec_recv(int fd, __u32 nsid, __u8 nssf, __u16 spsp,
 }
 
 int nvme_get_lba_status(int fd, __u64 slba, __u32 mndw, __u8 atype, __u16 rl,
-		void *data)
+			struct nvme_lba_status *lbas)
 {
 	struct nvme_admin_cmd cmd = {
 		.opcode =  nvme_admin_get_lba_status,
-		.addr = (__u64)(uintptr_t) data,
+		.addr = (__u64)(uintptr_t)lbas,
 		.cdw10 = slba & 0xffffffff,
 		.cdw11 = slba >> 32,
 		.cdw12 = mndw,
@@ -854,7 +814,7 @@ int nvme_dir_recv(int fd, __u32 nsid, __u16 dspec, __u8 dtype, __u8 doper,
 }
 
 int nvme_sanitize(int fd, __u8 sanact, __u8 ause, __u8 owpass, __u8 oipbp,
-		  __u8 no_dealloc, __u32 ovrpat)
+		  bool no_dealloc, __u32 ovrpat)
 {
 	struct nvme_admin_cmd cmd = {
 		.opcode		= nvme_admin_sanitize_nvm,
@@ -867,23 +827,24 @@ int nvme_sanitize(int fd, __u8 sanact, __u8 ause, __u8 owpass, __u8 oipbp,
 	return nvme_submit_admin_passthru(fd, &cmd);
 }
 
-int nvme_self_test_start(int fd, __u32 nsid, __u32 cdw10)
+int nvme_self_test_start(int fd, __u32 nsid, __u32 stc)
 {
 	struct nvme_admin_cmd cmd = {
 		.opcode = nvme_admin_dev_self_test,
 		.nsid = nsid,
-		.cdw10 = cdw10,
+		.cdw10 = stc,
 	};
 
 	return nvme_submit_admin_passthru(fd, &cmd);
 }
 
-int nvme_virtual_mgmt(int fd, __u32 cdw10, __u32 cdw11, __u32 *result)
+int nvme_virtual_mgmt(int fd, __u8 act, __u8 rt, __u16 cntlid, __u16 nr,
+		      __u32 *result)
 {
 	struct nvme_admin_cmd cmd = {
 		.opcode = nvme_admin_virtual_mgmt,
-		.cdw10  = cdw10,
-		.cdw11  = cdw11,
+		.cdw10  = act | rt << 8 | cntlid << 16,
+		.cdw11  = nr,
 	};
 	int err;
 

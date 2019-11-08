@@ -29,12 +29,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include "linux/nvme_ioctl.h"
-
 #include "common.h"
 #include "nvme.h"
 #include "nvme-print.h"
-#include "nvme-ioctl.h"
 #include "plugin.h"
 #include "json.h"
 

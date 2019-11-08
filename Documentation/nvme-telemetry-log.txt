@@ -9,7 +9,9 @@ SYNOPSIS
 --------
 [verse]
 'nvme telemetry-log' <device> [--output-file=<file> | -o <file>]
-		      [--host-generate=<gen> | -g <gen>]
+		      [--host-generate | -g ]
+		      [--controller-init | -c]
+		      [--data-area=<da> | -d <da>]
 
 DESCRIPTION
 -----------
@@ -28,12 +30,19 @@ OPTIONS
 --output-file=<file>::
 	File name to which raw binary data will be saved to.
 
--g <gen>::
---host-generate=<gen>::
-	If set to 1, controller shall capture the Telemetry Host-Initiated data
+-g::
+--host-generate::
+	If set, controller shall capture the Telemetry Host-Initiated data
 	representing the internal state of the controller at the time the
 	associated Get Log Page command is processed.
-	If cleated to 0, controller shall _not_ update this data.
+	If cleared to 0, controller shall _not_ update this data.
+
+-c::
+--controller-init::
+	If set, use the controller initiated telemetry page. If cleared
+	(default), use the host initiated telemetry log. This option takes
+	precedence over the --host-generate option, rendering it meaningless if
+	both are specified..
 
 -d <da>::
 --data-area=<da>::

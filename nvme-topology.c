@@ -7,7 +7,6 @@
 #include <sys/mman.h>
 
 #include "nvme.h"
-#include "nvme-ioctl.h"
 
 static const char *dev = "/dev/";
 static const char *subsys_dir = "/sys/class/nvme-subsystem/";
