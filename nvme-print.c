@@ -157,9 +157,13 @@ static void json_nvme_id_ns(struct nvme_id_ns *ns, unsigned int mode)
 	json_object_add_value_int(root, "nmic", ns->nmic);
 	json_object_add_value_int(root, "rescap", ns->rescap);
 	json_object_add_value_int(root, "fpi", ns->fpi);
-	json_object_add_value_int(root, "nawun", le16_to_cpu(ns->nawun));
-	json_object_add_value_int(root, "nawupf", le16_to_cpu(ns->nawupf));
-	json_object_add_value_int(root, "nacwu", le16_to_cpu(ns->nacwu));
+
+	if (ns->nsfeat & NVME_NS_FEAT_NATOMIC) {
+		json_object_add_value_int(root, "nawun", le16_to_cpu(ns->nawun));
+		json_object_add_value_int(root, "nawupf", le16_to_cpu(ns->nawupf));
+		json_object_add_value_int(root, "nacwu", le16_to_cpu(ns->nacwu));
+	}
+
 	json_object_add_value_int(root, "nabsn", le16_to_cpu(ns->nabsn));
 	json_object_add_value_int(root, "nabo", le16_to_cpu(ns->nabo));
 	json_object_add_value_int(root, "nabspf", le16_to_cpu(ns->nabspf));
@@ -168,7 +172,7 @@ static void json_nvme_id_ns(struct nvme_id_ns *ns, unsigned int mode)
 	json_object_add_value_int(root, "nsattr", ns->nsattr);
 	json_object_add_value_int(root, "nvmsetid", le16_to_cpu(ns->nvmsetid));
 
-	if (ns->nsfeat & 0x10) {
+	if (ns->nsfeat & NVME_NS_FEAT_IO_OPT) {
 		json_object_add_value_int(root, "npwg", le16_to_cpu(ns->npwg));
 		json_object_add_value_int(root, "npwa", le16_to_cpu(ns->npwa));
 		json_object_add_value_int(root, "npdg", le16_to_cpu(ns->npdg));
@@ -2232,20 +2236,25 @@ static void nvme_show_id_ctrl_ctrattr(__u8 ctrattr)
 static void nvme_show_id_ns_nsfeat(__u8 nsfeat)
 {
 	__u8 rsvd = (nsfeat & 0xE0) >> 5;
-	__u8 ioopt = (nsfeat & 0x10) >> 4;
-	__u8 dulbe = (nsfeat & 0x4) >> 2;
-	__u8 na = (nsfeat & 0x2) >> 1;
-	__u8 thin = nsfeat & 0x1;
+	__u8 ioopt = nsfeat & NVME_NS_FEAT_IO_OPT;
+	__u8 id_reuse = nsfeat & NVME_NS_FEAT_ID_REUSE;
+	__u8 dulbe = nsfeat & NVME_NS_FEAT_DULBE;
+	__u8 na = nsfeat & NVME_NS_FEAT_NATOMIC;
+	__u8 thin = nsfeat & NVME_NS_FEAT_THIN;
+
 	if (rsvd)
 		printf("  [7:5] : %#x\tReserved\n", rsvd);
 	printf("  [4:4] : %#x\tNPWG, NPWA, NPDG, NPDA, and NOWS are %sSupported\n",
-		ioopt, ioopt ? "" : "Not ");
+		!!ioopt, ioopt ? "" : "Not ");
+	printf("  [3:3] : %#x\tEUI64/NGUID reuse is %sSupported\n",
+		!!id_reuse, id_reuse? "" : "Not ");
 	printf("  [2:2] : %#x\tDeallocated or Unwritten Logical Block error %sSupported\n",
-		dulbe, dulbe ? "" : "Not ");
+		!!dulbe, dulbe ? "" : "Not ");
 	printf("  [1:1] : %#x\tNamespace uses %s\n",
-		na, na ? "NAWUN, NAWUPF, and NACWU" : "AWUN, AWUPF, and ACWU");
+		!!na, na ? "NAWUN, NAWUPF, and NACWU" :
+			"AWUN, AWUPF, and ACWU");
 	printf("  [0:0] : %#x\tThin Provisioning %sSupported\n",
-		thin, thin ? "" : "Not ");
+		!!thin, thin ? "" : "Not ");
 	printf("\n");
 }
 
@@ -2431,21 +2440,27 @@ void nvme_show_id_ns(struct nvme_id_ns *ns, unsigned int nsid,
 	printf("dlfeat  : %d\n", ns->dlfeat);
 	if (human)
 		nvme_show_id_ns_dlfeat(ns->dlfeat);
-	printf("nawun   : %d\n", le16_to_cpu(ns->nawun));
-	printf("nawupf  : %d\n", le16_to_cpu(ns->nawupf));
-	printf("nacwu   : %d\n", le16_to_cpu(ns->nacwu));
+
+	if (ns->nsfeat & NVME_NS_FEAT_NATOMIC) {
+		printf("nawun   : %d\n", le16_to_cpu(ns->nawun));
+		printf("nawupf  : %d\n", le16_to_cpu(ns->nawupf));
+		printf("nacwu   : %d\n", le16_to_cpu(ns->nacwu));
+	}
+
 	printf("nabsn   : %d\n", le16_to_cpu(ns->nabsn));
 	printf("nabo    : %d\n", le16_to_cpu(ns->nabo));
 	printf("nabspf  : %d\n", le16_to_cpu(ns->nabspf));
 	printf("noiob   : %d\n", le16_to_cpu(ns->noiob));
 	printf("nvmcap  : %.0Lf\n", int128_to_double(ns->nvmcap));
-	if (ns->nsfeat & 0x10) {
+
+	if (ns->nsfeat & NVME_NS_FEAT_IO_OPT) {
 		printf("npwg    : %u\n", le16_to_cpu(ns->npwg));
 		printf("npwa    : %u\n", le16_to_cpu(ns->npwa));
 		printf("npdg    : %u\n", le16_to_cpu(ns->npdg));
 		printf("npda    : %u\n", le16_to_cpu(ns->npda));
 		printf("nows    : %u\n", le16_to_cpu(ns->nows));
 	}
+
 	printf("nsattr	: %u\n", ns->nsattr);
 	printf("nvmsetid: %d\n", le16_to_cpu(ns->nvmsetid));
 	printf("anagrpid: %u\n", le32_to_cpu(ns->anagrpid));
