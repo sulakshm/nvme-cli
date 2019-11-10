@@ -382,6 +382,14 @@ enum {
 	NVME_NS_DPS_PI_MASK	= 0x7,
 	NVME_NS_DPS_PI_FIRST	= 1 << 3,
 	NVME_NS_NMIC_SHARED	= 1 << 0,
+	NVME_RESCAP_PTPL	= 1 << 0,
+	NVME_RESCAP_WE		= 1 << 1,
+	NVME_RESCAP_EA		= 1 << 2,
+	NVME_RESCAP_WERO	= 1 << 3,
+	NVME_RESCAP_EARO	= 1 << 4,
+	NVME_RESCAP_WEAR	= 1 << 5,
+	NVME_RESCAP_EAAR	= 1 << 6,
+	NVME_RESCAP_IEK_13	= 1 << 7,
 };
 
 struct nvme_ns_id_desc {

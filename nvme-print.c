@@ -2342,31 +2342,31 @@ static void nvme_show_id_ns_nmic(__u8 nmic)
 
 static void nvme_show_id_ns_rescap(__u8 rescap)
 {
-	__u8 rsvd = (rescap & 0x80) >> 7;
-	__u8 eaar = (rescap & 0x40) >> 6;
-	__u8 wear = (rescap & 0x20) >> 5;
-	__u8 earo = (rescap & 0x10) >> 4;
-	__u8 wero = (rescap & 0x8) >> 3;
-	__u8 ea = (rescap & 0x4) >> 2;
-	__u8 we = (rescap & 0x2) >> 1;
-	__u8 ptpl = rescap & 0x1;
+	__u8 iek13 = rescap & NVME_RESCAP_IEK_13;
+	__u8 eaar = rescap & NVME_RESCAP_EAAR;
+	__u8 wear = rescap & NVME_RESCAP_WEAR;
+	__u8 earo = rescap & NVME_RESCAP_EARO;
+	__u8 wero = rescap & NVME_RESCAP_WERO;
+	__u8 ea = rescap & NVME_RESCAP_EA;
+	__u8 we = rescap & NVME_RESCAP_WE;
+	__u8 ptpl = rescap & NVME_RESCAP_PTPL;
 
-	if (rsvd)
-		printf("  [7:7] : %#x\tReserved\n", rsvd);
+	printf("  [7:7] : %#x\tIgnore Key uses version %s definition\n",
+		!!iek13, iek13 ? ">=1.3" : "<=1.2.1");
 	printf("  [6:6] : %#x\tExclusive Access - All Registrants %sSupported\n",
-		eaar, eaar ? "" : "Not ");
+		!!eaar, eaar ? "" : "Not ");
 	printf("  [5:5] : %#x\tWrite Exclusive - All Registrants %sSupported\n",
-		wear, wear ? "" : "Not ");
+		!!wear, wear ? "" : "Not ");
 	printf("  [4:4] : %#x\tExclusive Access - Registrants Only %sSupported\n",
-		earo, earo ? "" : "Not ");
+		!!earo, earo ? "" : "Not ");
 	printf("  [3:3] : %#x\tWrite Exclusive - Registrants Only %sSupported\n",
-		wero, wero ? "" : "Not ");
+		!!wero, wero ? "" : "Not ");
 	printf("  [2:2] : %#x\tExclusive Access %sSupported\n",
-		ea, ea ? "" : "Not ");
+		!!ea, ea ? "" : "Not ");
 	printf("  [1:1] : %#x\tWrite Exclusive %sSupported\n",
-		we, we ? "" : "Not ");
+		!!we, we ? "" : "Not ");
 	printf("  [0:0] : %#x\tPersist Through Power Loss %sSupported\n",
-		ptpl, ptpl ? "" : "Not ");
+		!!ptpl, ptpl ? "" : "Not ");
 	printf("\n");
 }
 
