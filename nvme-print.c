@@ -2274,14 +2274,14 @@ static void nvme_show_id_ns_flbas(__u8 flbas)
 static void nvme_show_id_ns_mc(__u8 mc)
 {
 	__u8 rsvd = (mc & 0xFC) >> 2;
-	__u8 mdp = (mc & 0x2) >> 1;
-	__u8 extdlba = mc & 0x1;
+	__u8 mdp = mc & NVME_NS_MC_SEPARATE;
+	__u8 extdlba = mc & NVME_NS_MC_EXTENDED;
 	if (rsvd)
 		printf("  [7:2] : %#x\tReserved\n", rsvd);
 	printf("  [1:1] : %#x\tMetadata Pointer %sSupported\n",
-		mdp, mdp ? "" : "Not ");
+		!!mdp, mdp ? "" : "Not ");
 	printf("  [0:0] : %#x\tMetadata as Part of Extended Data LBA %sSupported\n",
-		extdlba, extdlba ? "" : "Not ");
+		!!extdlba, extdlba ? "" : "Not ");
 	printf("\n");
 }
 
