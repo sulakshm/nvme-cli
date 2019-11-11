@@ -2331,11 +2331,12 @@ static void nvme_show_id_ns_dps(__u8 dps)
 static void nvme_show_id_ns_nmic(__u8 nmic)
 {
 	__u8 rsvd = (nmic & 0xFE) >> 1;
-	__u8 mp = nmic & 0x1;
+	__u8 mp = nmic & NVME_NS_NMIC_SHARED;
+
 	if (rsvd)
 		printf("  [7:1] : %#x\tReserved\n", rsvd);
 	printf("  [0:0] : %#x\tNamespace Multipath %sCapable\n",
-		mp, mp ? "" : "Not ");
+		!!mp, mp ? "" : "Not ");
 	printf("\n");
 }
 
@@ -2349,6 +2350,7 @@ static void nvme_show_id_ns_rescap(__u8 rescap)
 	__u8 ea = (rescap & 0x4) >> 2;
 	__u8 we = (rescap & 0x2) >> 1;
 	__u8 ptpl = rescap & 0x1;
+
 	if (rsvd)
 		printf("  [7:7] : %#x\tReserved\n", rsvd);
 	printf("  [6:6] : %#x\tExclusive Access - All Registrants %sSupported\n",

@@ -381,6 +381,7 @@ enum {
 	NVME_NS_DPS_PI_TYPE3	= 3,
 	NVME_NS_DPS_PI_MASK	= 0x7,
 	NVME_NS_DPS_PI_FIRST	= 1 << 3,
+	NVME_NS_NMIC_SHARED	= 1 << 0,
 };
 
 struct nvme_ns_id_desc {
