@@ -2276,6 +2276,7 @@ static void nvme_show_id_ns_mc(__u8 mc)
 	__u8 rsvd = (mc & 0xFC) >> 2;
 	__u8 mdp = mc & NVME_NS_MC_SEPARATE;
 	__u8 extdlba = mc & NVME_NS_MC_EXTENDED;
+
 	if (rsvd)
 		printf("  [7:2] : %#x\tReserved\n", rsvd);
 	printf("  [1:1] : %#x\tMetadata Pointer %sSupported\n",
@@ -2288,40 +2289,42 @@ static void nvme_show_id_ns_mc(__u8 mc)
 static void nvme_show_id_ns_dpc(__u8 dpc)
 {
 	__u8 rsvd = (dpc & 0xE0) >> 5;
-	__u8 pil8 = (dpc & 0x10) >> 4;
-	__u8 pif8 = (dpc & 0x8) >> 3;
-	__u8 pit3 = (dpc & 0x4) >> 2;
-	__u8 pit2 = (dpc & 0x2) >> 1;
-	__u8 pit1 = dpc & 0x1;
+	__u8 pil8 = dpc & NVME_NS_DPC_PI_LAST;
+	__u8 pif8 = dpc & NVME_NS_DPC_PI_FIRST;
+	__u8 pit3 = dpc & NVME_NS_DPC_PI_TYPE3;
+	__u8 pit2 = dpc & NVME_NS_DPC_PI_TYPE2;
+	__u8 pit1 = dpc & NVME_NS_DPC_PI_TYPE1;
+
 	if (rsvd)
 		printf("  [7:5] : %#x\tReserved\n", rsvd);
 	printf("  [4:4] : %#x\tProtection Information Transferred as Last 8 Bytes of Metadata %sSupported\n",
-		pil8, pil8 ? "" : "Not ");
+		!!pil8, pil8 ? "" : "Not ");
 	printf("  [3:3] : %#x\tProtection Information Transferred as First 8 Bytes of Metadata %sSupported\n",
-		pif8, pif8 ? "" : "Not ");
+		!!pif8, pif8 ? "" : "Not ");
 	printf("  [2:2] : %#x\tProtection Information Type 3 %sSupported\n",
-		pit3, pit3 ? "" : "Not ");
+		!!pit3, pit3 ? "" : "Not ");
 	printf("  [1:1] : %#x\tProtection Information Type 2 %sSupported\n",
-		pit2, pit2 ? "" : "Not ");
+		!!pit2, pit2 ? "" : "Not ");
 	printf("  [0:0] : %#x\tProtection Information Type 1 %sSupported\n",
-		pit1, pit1 ? "" : "Not ");
+		!!pit1, pit1 ? "" : "Not ");
 	printf("\n");
 }
 
 static void nvme_show_id_ns_dps(__u8 dps)
 {
 	__u8 rsvd = (dps & 0xF0) >> 4;
-	__u8 pif8 = (dps & 0x8) >> 3;
-	__u8 pit = dps & 0x7;
+	__u8 pif8 = dps & NVME_NS_DPS_PI_FIRST;
+	__u8 pit = dps & NVME_NS_DPS_PI_MASK;
+
 	if (rsvd)
 		printf("  [7:4] : %#x\tReserved\n", rsvd);
 	printf("  [3:3] : %#x\tProtection Information is Transferred as %s 8 Bytes of Metadata\n",
-		pif8, pif8 ? "First" : "Last");
+		!!pif8, pif8 ? "First" : "Last");
 	printf("  [2:0] : %#x\tProtection Information %s\n", pit,
 		pit == 3 ? "Type 3 Enabled" :
-		pit == 2 ? "Type 2 Enabled" :
-		pit == 1 ? "Type 1 Enabled" :
-		pit == 0 ? "Disabled" : "Reserved Enabled");
+			pit == 2 ? "Type 2 Enabled" :
+			pit == 1 ? "Type 1 Enabled" :
+			pit == 0 ? "Disabled" : "Reserved Enabled");
 	printf("\n");
 }
 
