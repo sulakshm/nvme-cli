@@ -1004,17 +1004,18 @@ static void nvme_show_registers_cc_shn (__u8 shn)
 static void nvme_show_registers_cc(__u32 cc)
 {
 	printf("\tI/O Completion Queue Entry Size (IOCQES): %u bytes\n",
-		1 << ((cc & 0x00f00000) >> NVME_CC_IOCQES_SHIFT));
+		1 << ((cc >> NVME_CC_IOCQES_SHIFT) & 0xf));
 	printf("\tI/O Submission Queue Entry Size (IOSQES): %u bytes\n",
-		1 << ((cc & 0x000f0000) >> NVME_CC_IOSQES_SHIFT));
-	nvme_show_registers_cc_shn((cc & 0x0000c000) >> NVME_CC_SHN_SHIFT);
-	nvme_show_registers_cc_ams((cc & 0x00003800) >> NVME_CC_AMS_SHIFT);
+		1 << ((cc >> NVME_CC_IOSQES_SHIFT) & 0xf));
+	nvme_show_registers_cc_shn((cc >> NVME_CC_SHN_SHIFT) & 0x3);
+	nvme_show_registers_cc_ams((cc >> NVME_CC_AMS_SHIFT) & 0xf);
 	printf("\tMemory Page Size                   (MPS): %u bytes\n",
-		1 << (12 + ((cc & 0x00000780) >> NVME_CC_MPS_SHIFT)));
+		1 << (12 + ((cc >> NVME_CC_MPS_SHIFT) & 0xf)));
 	printf("\tI/O Command Sets Selected          (CSS): %s\n",
-		(cc & 0x00000070) ? "Reserved":"NVM Command Set");
+		((cc >> NVME_CC_CSS_SHIFT) & 0x7) == NVME_CC_CSS_NVM ?
+				"NVM Command Set" : "Reserved");
 	printf("\tEnable                              (EN): %s\n\n",
-		(cc & 0x00000001) ? "Yes":"No");
+		(cc & 0x1) ? "Yes":"No");
 }
 
 static void nvme_show_registers_csts_shst(__u8 shst)
@@ -1038,23 +1039,23 @@ static void nvme_show_registers_csts_shst(__u8 shst)
 static void nvme_show_registers_csts(__u32 csts)
 {
 	printf("\tProcessing Paused               (PP): %s\n",
-		(csts & 0x00000020) ? "Yes":"No");
+		(csts & NVME_CSTS_PP) ? "Yes" : "No");
 	printf("\tNVM Subsystem Reset Occurred (NSSRO): %s\n",
-		(csts & 0x00000010) ? "Yes":"No");
-	nvme_show_registers_csts_shst((csts & 0x0000000c) >> 2);
+		(csts & NVME_CSTS_NSSRO	) ? "Yes" : "No");
+	nvme_show_registers_csts_shst((csts >> 2) & 0x3);
 	printf("\tController Fatal Status        (CFS): %s\n",
-		(csts & 0x00000002) ? "True":"False");
+		(csts & NVME_CSTS_CFS) ? "True" : "False");
 	printf("\tReady                          (RDY): %s\n\n",
-		(csts & 0x00000001) ? "Yes":"No");
+		(csts & NVME_CSTS_RDY) ? "Yes" : "No");
 
 }
 
 static void nvme_show_registers_aqa(__u32 aqa)
 {
 	printf("\tAdmin Completion Queue Size (ACQS): %u\n",
-		((aqa & 0x0fff0000) >> 16) + 1);
+		((aqa >> 16) & 0xfff) + 1);
 	printf("\tAdmin Submission Queue Size (ASQS): %u\n\n",
-		(aqa & 0x00000fff) + 1);
+		(aqa & 0xfff) + 1);
 
 }
 
