@@ -160,27 +160,6 @@ perror:
 	return err;
 }
 
-static int check_arg_dev(int argc, char **argv)
-{
-	if (optind >= argc) {
-		errno = EINVAL;
-		perror(argv[0]);
-		return -EINVAL;
-	}
-	return 0;
-}
-
-static int get_dev(int argc, char **argv)
-{
-	int ret;
-
-	ret = check_arg_dev(argc, argv);
-	if (ret)
-		return ret;
-
-	return open_dev(argv[optind]);
-}
-
 int parse_and_open(int argc, char **argv, const char *desc,
 	const struct argconfig_commandline_options *opts)
 {
@@ -190,10 +169,15 @@ int parse_and_open(int argc, char **argv, const char *desc,
 	if (ret)
 		return ret;
 
-	ret = get_dev(argc, argv);
+	if (optind >= argc) {
+		errno = EINVAL;
+		perror(argv[0]);
+		return -EINVAL;
+	}
+
+	ret = open_dev(argv[optind]);
 	if (ret < 0)
 		argconfig_print_help(desc, opts);
-
 	return ret;
 }
 
