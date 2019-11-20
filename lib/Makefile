@@ -31,7 +31,7 @@ endif
 
 all: $(all_targets)
 
-libnvme_srcs := nvme/nvme-ioctl.c
+libnvme_srcs := nvme/nvme-ioctl.c nvme/nvme-fabrics.c
 
 libnvme_objs := $(patsubst %.c,%.ol,$(libnvme_srcs))
 libnvme_sobjs := $(patsubst %.c,%.os,$(libnvme_srcs))

@@ -1,7 +1,10 @@
 nvme
+!nvme/
 *.xml
 a.out
 *.o
+*.ol
+*.os
 *~
 *.swp
 NVME-VERSION-FILE
