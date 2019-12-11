@@ -19,7 +19,7 @@
 #include <linux/types.h>
 #include <sys/ioctl.h>
 
-#include "nvme-struct.h"
+#include "nvme.h"
 
 /* 
  * We can not always count on the kernel UAPI being installed. Use the same

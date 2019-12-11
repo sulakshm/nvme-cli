@@ -15,8 +15,8 @@
 #ifndef _LINUX_NVME_H
 #define _LINUX_NVME_H
 
-#include "nvme/nvme-struct.h"
-#include "nvme/nvme-ioctl.h"
-#include "nvme/nvme-fabrics.h"
+#include "nvme/nvme.h"
+#include "nvme/ioctl.h"
+#include "nvme/fabrics.h"
 
 #endif /* _LINUX_NVME_H */

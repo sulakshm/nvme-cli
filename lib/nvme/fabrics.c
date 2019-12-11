@@ -19,7 +19,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include "nvme-fabrics.h"
+#include "fabrics.h"
 
 #define PATH_NVME_FABRICS	"/dev/nvme-fabrics"
 

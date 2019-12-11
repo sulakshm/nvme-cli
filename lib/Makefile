@@ -31,12 +31,12 @@ endif
 
 all: $(all_targets)
 
-libnvme_srcs := nvme/nvme-ioctl.c nvme/nvme-fabrics.c
+libnvme_srcs := nvme/ioctl.c nvme/fabrics.c
 
 libnvme_objs := $(patsubst %.c,%.ol,$(libnvme_srcs))
 libnvme_sobjs := $(patsubst %.c,%.os,$(libnvme_srcs))
 
-$(libnvme_objs) $(libnvme_sobjs): libnvme.h nvme/nvme-struct.h nvme/nvme-ioctl.h
+$(libnvme_objs) $(libnvme_sobjs): libnvme.h nvme/nvme.h nvme/ioctl.h
 
 %.os: %.c
 	$(QUIET_CC)$(CC) $(SO_CFLAGS) -c -o $@ $<
@@ -55,8 +55,9 @@ $(libname): $(libnvme_sobjs) libnvme.map
 	$(QUIET_CC)$(CC) $(SO_CFLAGS) -Wl,--version-script=libnvme.map -Wl,-soname=$(soname) -o $@ $(libnvme_sobjs) $(LINK_FLAGS)
 
 install: $(all_targets)
-	install -D -m 644 nvme/nvme-struct.h $(includedir)/nvme/nvme-struct.h
-	install -D -m 644 nvme/nvme-ioctl.h $(includedir)/nvme/nvme-ioctl.h
+	install -D -m 644 nvme/nvme.h $(includedir)/nvme/nvme.h
+	install -D -m 644 nvme/ioctl.h $(includedir)/nvme/ioctl.h
+	install -D -m 644 nvme/fabrics.h $(includedir)/nvme/fabrics.h
 	install -D -m 644 libnvme.h $(includedir)/libnvme.h
 	install -D -m 644 libnvme.a $(libdir)/libnvme.a
 ifeq ($(ENABLE_SHARED),1)
