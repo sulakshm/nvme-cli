@@ -80,8 +80,6 @@ struct nvme_topology {
 	struct nvme_subsystem *subsystems;
 };
 
-#define SYS_NVME "/sys/class/nvme"
-
 void register_extension(struct plugin *plugin);
 int parse_and_open(int argc, char **argv, const char *desc,
 	const struct argconfig_commandline_options *clo);
@@ -93,13 +91,6 @@ int __id_ctrl(int argc, char **argv, struct command *cmd,
 	struct plugin *plugin, void (*vs)(__u8 *vs, struct json_object *root));
 char *nvme_char_from_block(char *block);
 void *mmap_registers(const char *dev);
-
-extern int current_index;
-int scan_namespace_filter(const struct dirent *d);
-int scan_ctrl_paths_filter(const struct dirent *d);
-int scan_ctrls_filter(const struct dirent *d);
-int scan_subsys_filter(const struct dirent *d);
-int scan_dev_filter(const struct dirent *d);
 
 int scan_subsystems(struct nvme_topology *t, const char *subsysnqn,
 		    __u32 ns_instance);

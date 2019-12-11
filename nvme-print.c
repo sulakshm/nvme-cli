@@ -1627,7 +1627,8 @@ void nvme_show_relatives(const char *name)
 		bool comma = false;
 		int n, ns, cntlid;
 
-		n = scandir(path, &paths, scan_ctrl_paths_filter, alphasort);
+		n = scandir(path, &paths, nvme_scan_paths_filter,
+			    alphasort);
 		if (n < 0) {
 			free(path);
 			return;

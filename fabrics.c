@@ -252,7 +252,7 @@ static bool ctrl_matches_connectargs(char *name, struct connect_args *args)
 	char *path, *addr;
 	int ret;
 
-	ret = asprintf(&path, "%s/%s", SYS_NVME, name);
+	ret = asprintf(&path, "%s/%s", sys_nvme, name);
 	if (ret < 0)
 		return found;
 
@@ -295,7 +295,7 @@ static char *find_ctrl_with_connectargs(struct connect_args *args)
 	char *devname = NULL;
 	int i, n;
 
-	n = scandir(SYS_NVME, &devices, scan_ctrls_filter, alphasort);
+	n = scandir(sys_nvme, &devices, nvme_scan_ctrls_filter, alphasort);
 	if (n < 0) {
 		fprintf(stderr, "no NVMe controller(s) detected.\n");
 		return NULL;
@@ -1070,9 +1070,9 @@ static int disconnect_subsys(char *nqn, char *ctrl)
 	char subsysnqn[NVMF_NQN_SIZE] = {};
 	int fd, ret = 0;
 
-	if (asprintf(&sysfs_nqn_path, "%s/%s/subsysnqn", SYS_NVME, ctrl) < 0)
+	if (asprintf(&sysfs_nqn_path, "%s/%s/subsysnqn", sys_nvme, ctrl) < 0)
 		goto free;
-	if (asprintf(&sysfs_del_path, "%s/%s/delete_controller", SYS_NVME, ctrl) < 0)
+	if (asprintf(&sysfs_del_path, "%s/%s/delete_controller", sys_nvme, ctrl) < 0)
 		goto free;
 
 	fd = open(sysfs_nqn_path, O_RDONLY);
@@ -1110,7 +1110,7 @@ static int disconnect_by_nqn(char *nqn)
 	if (strlen(nqn) > NVMF_NQN_SIZE)
 		return -EINVAL;
 
-	n = scandir(SYS_NVME, &devices, scan_sys_nvme_filter, alphasort);
+	n = scandir(sys_nvme, &devices, scan_sys_nvme_filter, alphasort);
 	if (n < 0)
 		return n;
 

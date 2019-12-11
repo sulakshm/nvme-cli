@@ -31,12 +31,12 @@ endif
 
 all: $(all_targets)
 
-libnvme_srcs := nvme/ioctl.c nvme/fabrics.c
+libnvme_srcs := nvme/ioctl.c nvme/fabrics.c nvme/filters.c
 
 libnvme_objs := $(patsubst %.c,%.ol,$(libnvme_srcs))
 libnvme_sobjs := $(patsubst %.c,%.os,$(libnvme_srcs))
 
-$(libnvme_objs) $(libnvme_sobjs): libnvme.h nvme/nvme.h nvme/ioctl.h
+$(libnvme_objs) $(libnvme_sobjs): libnvme.h nvme/nvme.h nvme/ioctl.h nvme/filters.h
 
 %.os: %.c
 	$(QUIET_CC)$(CC) $(SO_CFLAGS) -c -o $@ $<
@@ -58,6 +58,7 @@ install: $(all_targets)
 	install -D -m 644 nvme/nvme.h $(includedir)/nvme/nvme.h
 	install -D -m 644 nvme/ioctl.h $(includedir)/nvme/ioctl.h
 	install -D -m 644 nvme/fabrics.h $(includedir)/nvme/fabrics.h
+	install -D -m 644 nvme/filters.h $(includedir)/nvme/filters.h
 	install -D -m 644 libnvme.h $(includedir)/libnvme.h
 	install -D -m 644 libnvme.a $(libdir)/libnvme.a
 ifeq ($(ENABLE_SHARED),1)

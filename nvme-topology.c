@@ -8,9 +8,6 @@
 
 #include "nvme.h"
 
-static const char *dev = "/dev/";
-static const char *subsys_dir = "/sys/class/nvme-subsystem/";
-
 char *get_nvme_subsnqn(char *path)
 {
 	char sspath[320], *subsysnqn;
@@ -128,7 +125,7 @@ static char *get_nvme_ctrl_path_ana_state(char *path, int nsid)
 	if (!ana_state)
 		return NULL;
 
-	n = scandir(path, &paths, scan_ctrl_paths_filter, alphasort);
+	n = scandir(path, &paths, nvme_scan_paths_filter, alphasort);
 	if (n <= 0) {
 		free(ana_state);
 		return NULL;
@@ -198,9 +195,10 @@ static int scan_ctrl(struct nvme_ctrl *c, char *p, __u32 ns_instance)
 	if (ns_instance)
 		c->ana_state = get_nvme_ctrl_path_ana_state(path, ns_instance);
 
-	ret = scandir(path, &ns, scan_namespace_filter, alphasort);
+	ret = scandir(path, &ns, nvme_scan_namespace_filter, alphasort);
 	if (ret == -1) {
-		fprintf(stderr, "Failed to open %s: %s\n", path, strerror(errno));
+		fprintf(stderr, "Failed to open %s: %s\n", path,
+			strerror(errno));
 		return errno;
 	}
 
@@ -251,9 +249,10 @@ static int scan_subsystem(struct nvme_subsystem *s, __u32 ns_instance)
 		return ret;
 
 	s->subsysnqn = get_nvme_subsnqn(path);
-	ret = scandir(path, &ctrls, scan_ctrls_filter, alphasort);
+	ret = scandir(path, &ctrls, nvme_scan_ctrls_filter, alphasort);
 	if (ret == -1) {
-		fprintf(stderr, "Failed to open %s: %s\n", path, strerror(errno));
+		fprintf(stderr, "Failed to open %s: %s\n", path,
+			strerror(errno));
 		return errno;
 	}
 	s->nr_ctrls = ret;
@@ -269,9 +268,10 @@ static int scan_subsystem(struct nvme_subsystem *s, __u32 ns_instance)
 		free(ctrls[i]);
 	free(ctrls);
 
-	ret = scandir(path, &ns, scan_namespace_filter, alphasort);
+	ret = scandir(path, &ns, nvme_scan_namespace_filter, alphasort);
 	if (ret == -1) {
-		fprintf(stderr, "Failed to open %s: %s\n", path, strerror(errno));
+		fprintf(stderr, "Failed to open %s: %s\n", path,
+			strerror(errno));
 		return errno;
 	}
 
@@ -336,7 +336,8 @@ static int legacy_list(struct nvme_topology *t)
 	int ret = 0, fd, i;
 	char *path;
 
-	t->nr_subsystems = scandir(dev, &devices, scan_ctrls_filter, alphasort);
+	t->nr_subsystems = scandir(dev, &devices, nvme_scan_ctrls_filter,
+				   alphasort);
 	if (t->nr_subsystems < 0) {
 		fprintf(stderr, "no NVMe device(s) detected.\n");
 		return t->nr_subsystems;
@@ -344,7 +345,7 @@ static int legacy_list(struct nvme_topology *t)
 
 	t->subsystems = calloc(t->nr_subsystems, sizeof(*s));
 	for (i = 0; i < t->nr_subsystems; i++) {
-		int j;
+		int j, instance;
 
 		s = &t->subsystems[i];
 		s->nr_ctrls = 1;
@@ -355,9 +356,10 @@ static int legacy_list(struct nvme_topology *t)
 
 		c = s->ctrls;
 		c->name = strdup(s->name);
-		sscanf(c->name, "nvme%d", &current_index);
-		c->nr_namespaces = scandir(dev, &namespaces, scan_dev_filter,
-					   alphasort);
+		sscanf(c->name, "nvme%d", &instance);
+
+		c->nr_namespaces = nvme_scan_dev_instance_namespaces(&namespaces,
+								     instance);
 		c->namespaces = calloc(c->nr_namespaces, sizeof(*n));
 
 		ret = asprintf(&path, "%s%s", dev, c->name);
@@ -432,7 +434,7 @@ int scan_subsystems(struct nvme_topology *t, const char *subsysnqn,
 	struct dirent **subsys;
 	int i, j = 0;
 
-	t->nr_subsystems = scandir(subsys_dir, &subsys, scan_subsys_filter,
+	t->nr_subsystems = scandir(subsys_dir, &subsys, nvme_scan_subsys_filter,
 				   alphasort);
 	if (t->nr_subsystems < 0)
 		return legacy_list(t);
