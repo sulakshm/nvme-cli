@@ -933,6 +933,8 @@ int nvme_format(int fd, __u32 nsid, __u8 lbaf, __u8 ses, __u8 pi,
  * @flbas:	Format with thes logical block settings
  * @dps:	Data protection settings
  * @nmic:	Namespace mulit-pathing capable
+ * @anagrpid:	Asynchronous namespace group identifier
+ * @nvmesetid: 	NVM Set identifier
  * @timeout:	Override the default timeout to this value in milliseconds;
  * 		clear to 0 to use the default
  * @result:	On success, the new namespace id that was created
@@ -944,8 +946,9 @@ int nvme_format(int fd, __u32 nsid, __u8 lbaf, __u8 ses, __u8 pi,
  * Return: The nvme command status if a response was received or -errno
  * 	   otherwise.
  */
-int nvme_ns_create(int fd, __u64 nsze, __u64 ncap, __u8 flbas,
-		   __u8 dps, __u8 nmic, __u32 timeout, __u32 *result);
+int nvme_ns_create(int fd, __u64 nsze, __u64 ncap, __u8 flbas, __u8 dps,
+		   __u8 nmic, __u32 anagrpid, __u16 nvmsetid,  __u32 timeout,
+		   __u32 *result);
 
 /**
  * nvme_ns_delete() - Delete namespace from subsystem

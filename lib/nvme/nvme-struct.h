@@ -589,16 +589,16 @@ enum {
 };
 
 struct nvme_self_test_res {
-	__u8 			device_self_test_status;
-	__u8			segment_num;
-	__u8			valid_diagnostic_info;
+	__u8 			dsts;
+	__u8			seg;
+	__u8			vdi;
 	__u8			rsvd;
-	__le64			power_on_hours;
+	__le64			poh;
 	__le32			nsid;
-	__le64			failing_lba;
-	__u8			status_code_type;
-	__u8			status_code;
-	__u8			vendor_specific[2];
+	__le64			flba;
+	__u8			sct;
+	__u8			sc;
+	__u8			vs[2];
 } __attribute__((packed));
 
 enum {
