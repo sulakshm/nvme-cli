@@ -20,10 +20,12 @@
 #include <stdint.h>
 #include <endian.h>
 
+#include "lib/libnvme.h"
 #include "plugin.h"
 #include "util/json.h"
 #include "util/argconfig.h"
-#include "linux/nvme.h"
+
+#define NVME_IOCTL_TIMEOUT 120000
 
 enum nvme_print_flags {
 	NORMAL	= 0,

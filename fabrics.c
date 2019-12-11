@@ -33,8 +33,6 @@
 #include <sys/stat.h>
 #include <stddef.h>
 
-#include "util/parser.h"
-#include "nvme-ioctl.h"
 #include "nvme-status.h"
 #include "fabrics.h"
 
@@ -49,6 +47,11 @@
 #endif
 
 #define NVMF_HOSTID_SIZE	36
+#define PATH_NVMF_DISC		"/etc/nvme/discovery.conf"
+#define PATH_NVMF_HOSTNQN	"/etc/nvme/hostnqn"
+#define PATH_NVMF_HOSTID	"/etc/nvme/hostid"
+#define MAX_DISC_ARGS		10
+#define MAX_DISC_RETRIES	10
 
 const char *conarg_nqn = "nqn";
 const char *conarg_transport = "transport";
@@ -56,31 +59,14 @@ const char *conarg_traddr = "traddr";
 const char *conarg_trsvcid = "trsvcid";
 const char *conarg_host_traddr = "host_traddr";
 
-static struct config {
-	char *nqn;
-	char *transport;
-	char *traddr;
-	char *trsvcid;
-	char *host_traddr;
-	char *hostnqn;
-	char *hostid;
-	int  nr_io_queues;
-	int  nr_write_queues;
-	int  nr_poll_queues;
-	int  queue_size;
-	int  keep_alive_tmo;
-	int  reconnect_delay;
-	int  ctrl_loss_tmo;
-	int  tos;
-	char *raw;
-	char *device;
-	int  duplicate_connect;
-	int  disable_sqflow;
-	int  hdr_digest;
-	int  data_digest;
-	bool persistent;
-	bool quiet;
-} cfg = { NULL };
+/* Name of file to output log pages in their raw format */ 
+char *raw;
+bool persistent;
+bool quiet;
+
+static int do_discover(char *argstr, bool connect);
+
+static struct fabrics_config cfg = { NULL };
 
 struct connect_args {
 	char *subsysnqn;
@@ -88,26 +74,6 @@ struct connect_args {
 	char *traddr;
 	char *trsvcid;
 	char *host_traddr;
-};
-
-#define BUF_SIZE		4096
-#define PATH_NVME_FABRICS	"/dev/nvme-fabrics"
-#define PATH_NVMF_DISC		"/etc/nvme/discovery.conf"
-#define PATH_NVMF_HOSTNQN	"/etc/nvme/hostnqn"
-#define PATH_NVMF_HOSTID	"/etc/nvme/hostid"
-#define MAX_DISC_ARGS		10
-#define MAX_DISC_RETRIES	10
-
-enum {
-	OPT_INSTANCE,
-	OPT_CNTLID,
-	OPT_ERR
-};
-
-static const match_table_t opt_tokens = {
-	{ OPT_INSTANCE,		"instance=%d"	},
-	{ OPT_CNTLID,		"cntlid=%d"	},
-	{ OPT_ERR,		NULL		},
 };
 
 static const char *arg_str(const char * const *strings,
@@ -208,7 +174,6 @@ static const char *cms_str(__u8 cm)
 	return arg_str(cms, ARRAY_SIZE(cms), cm);
 }
 
-static int do_discover(char *argstr, bool connect);
 
 /*
  * parse strings with connect arguments to find a particular field.
@@ -261,8 +226,8 @@ empty_field:
 
 static int ctrl_instance(char *device)
 {
-	char d[64];
 	int ret, instance;
+	char d[64];
 
 	device = basename(device);
 	ret = sscanf(device, "nvme%d", &instance);
@@ -354,65 +319,6 @@ cleanup_devices:
 	return devname;
 }
 
-static int add_ctrl(const char *argstr)
-{
-	substring_t args[MAX_OPT_ARGS];
-	char buf[BUF_SIZE], *options, *p;
-	int token, ret, fd, len = strlen(argstr);
-
-	fd = open(PATH_NVME_FABRICS, O_RDWR);
-	if (fd < 0) {
-		fprintf(stderr, "Failed to open %s: %s\n",
-			 PATH_NVME_FABRICS, strerror(errno));
-		ret = -errno;
-		goto out;
-	}
-
-	ret = write(fd, argstr, len);
-	if (ret != len) {
-		if (errno != EALREADY || !cfg.quiet)
-			fprintf(stderr, "Failed to write to %s: %s\n",
-				 PATH_NVME_FABRICS, strerror(errno));
-		ret = -errno;
-		goto out_close;
-	}
-
-	len = read(fd, buf, BUF_SIZE);
-	if (len < 0) {
-		fprintf(stderr, "Failed to read from %s: %s\n",
-			 PATH_NVME_FABRICS, strerror(errno));
-		ret = -errno;
-		goto out_close;
-	}
-
-	buf[len] = '\0';
-	options = buf;
-	while ((p = strsep(&options, ",\n")) != NULL) {
-		if (!*p)
-			continue;
-
-		token = match_token(p, opt_tokens, args);
-		switch (token) {
-		case OPT_INSTANCE:
-			if (match_int(args, &token))
-				goto out_fail;
-			ret = token;
-			goto out_close;
-		default:
-			/* ignore */
-			break;
-		}
-	}
-
-out_fail:
-	fprintf(stderr, "Failed to parse ctrl info for \"%s\"\n", argstr);
-	ret = -EINVAL;
-out_close:
-	close(fd);
-out:
-	return ret;
-}
-
 static int remove_ctrl_by_path(char *sysfs_path)
 {
 	int ret, fd;
@@ -466,10 +372,10 @@ enum {
 static int nvmf_get_log_page_discovery(const char *dev_path,
 		struct nvmf_disc_rsp_page_hdr **logp, int *numrec, int *status)
 {
+	int error, fd, max_retries = MAX_DISC_RETRIES, retries = 0;
 	struct nvmf_disc_rsp_page_hdr *log;
 	unsigned int hdr_size;
 	unsigned long genctr;
-	int error, fd, max_retries = MAX_DISC_RETRIES, retries = 0;
 
 	fd = open(dev_path, O_RDWR);
 	if (fd < 0) {
@@ -479,7 +385,8 @@ static int nvmf_get_log_page_discovery(const char *dev_path,
 		goto out;
 	}
 
-	/* first get_log_page we just need numrec entry from discovery hdr.
+	/*
+	 * first get_log_page we just need numrec entry from discovery hdr.
 	 * host supplies its desired bytes via dwords, per NVMe spec.
 	 */
 	hdr_size = round_up((offsetof(struct nvmf_disc_rsp_page_hdr, numrec) +
@@ -583,15 +490,16 @@ out:
 	return error;
 }
 
-static int space_strip_len(int max, const char *str)
+static void space_strip_len(int max, char *str)
 {
 	int i;
 
-	for (i = max - 1; i >= 0; i--)
+	for (i = max - 1; i >= 0; i--) {
 		if (str[i] != '\0' && str[i] != ' ')
-			break;
-
-	return i + 1;
+			return;
+		else
+			str[i] = '\0';
+	}
 }
 
 static void print_discovery_log(struct nvmf_disc_rsp_page_hdr *log, int numrec)
@@ -605,19 +513,18 @@ static void print_discovery_log(struct nvmf_disc_rsp_page_hdr *log, int numrec)
 	for (i = 0; i < numrec; i++) {
 		struct nvmf_disc_rsp_page_entry *e = &log->entries[i];
 
+		space_strip_len(NVMF_TRSVCID_SIZE, e->trsvcid);
+		space_strip_len(NVMF_TRADDR_SIZE, e->traddr);
+
 		printf("=====Discovery Log Entry %d======\n", i);
 		printf("trtype:  %s\n", trtype_str(e->trtype));
 		printf("adrfam:  %s\n", adrfam_str(e->adrfam));
 		printf("subtype: %s\n", subtype_str(e->subtype));
 		printf("treq:    %s\n", treq_str(e->treq));
 		printf("portid:  %d\n", e->portid);
-		printf("trsvcid: %.*s\n",
-		       space_strip_len(NVMF_TRSVCID_SIZE, e->trsvcid),
-		       e->trsvcid);
+		printf("trsvcid: %s\n", e->trsvcid);
 		printf("subnqn:  %s\n", e->subnqn);
-		printf("traddr:  %.*s\n",
-		       space_strip_len(NVMF_TRADDR_SIZE, e->traddr),
-		       e->traddr);
+		printf("traddr:  %s\n", e->traddr);
 
 		switch (e->trtype) {
 		case NVMF_TRTYPE_RDMA:
@@ -640,13 +547,12 @@ static void print_discovery_log(struct nvmf_disc_rsp_page_hdr *log, int numrec)
 
 static void save_discovery_log(struct nvmf_disc_rsp_page_hdr *log, int numrec)
 {
-	int fd;
-	int len, ret;
+	int fd, len, ret;
 
-	fd = open(cfg.raw, O_CREAT|O_RDWR|O_TRUNC, S_IRUSR|S_IWUSR);
+	fd = open(raw, O_CREAT|O_RDWR|O_TRUNC, S_IRUSR|S_IWUSR);
 	if (fd < 0) {
 		fprintf(stderr, "failed to open %s: %s\n",
-			cfg.raw, strerror(errno));
+			raw, strerror(errno));
 		return;
 	}
 
@@ -655,9 +561,9 @@ static void save_discovery_log(struct nvmf_disc_rsp_page_hdr *log, int numrec)
 	ret = write(fd, log, len);
 	if (ret < 0)
 		fprintf(stderr, "failed to write to %s: %s\n",
-			cfg.raw, strerror(errno));
+			raw, strerror(errno));
 	else
-		printf("Discovery log is saved to %s\n", cfg.raw);
+		printf("Discovery log is saved to %s\n", raw);
 
 	close(fd);
 }
@@ -701,7 +607,7 @@ static char *hostnqn_generate_systemd(void)
 }
 
 /* returns an allocated string or NULL */
-char *hostnqn_read(void)
+char *hostnqn_read()
 {
 	char *ret;
 
@@ -716,14 +622,14 @@ char *hostnqn_read(void)
 	return NULL;
 }
 
-static int nvmf_hostnqn_file(void)
+static int nvmf_hostnqn_file()
 {
 	cfg.hostnqn = hostnqn_read();
 
 	return cfg.hostnqn != NULL;
 }
 
-static int nvmf_hostid_file(void)
+static int nvmf_hostid_file()
 {
 	FILE *f;
 	char hostid[NVMF_HOSTID_SIZE + 1];
@@ -746,127 +652,15 @@ out:
 	return ret;
 }
 
-static int
-add_bool_argument(char **argstr, int *max_len, char *arg_str, bool arg)
-{
-	int len;
-
-	if (arg) {
-		len = snprintf(*argstr, *max_len, ",%s", arg_str);
-		if (len < 0)
-			return -EINVAL;
-		*argstr += len;
-		*max_len -= len;
-	}
-
-	return 0;
-}
-
-static int
-add_int_argument(char **argstr, int *max_len, char *arg_str, int arg,
-		 bool allow_zero)
-{
-	int len;
-
-	if ((arg && !allow_zero) || (arg != -1 && allow_zero)) {
-		len = snprintf(*argstr, *max_len, ",%s=%d", arg_str, arg);
-		if (len < 0)
-			return -EINVAL;
-		*argstr += len;
-		*max_len -= len;
-	}
-
-	return 0;
-}
-
-static int
-add_argument(char **argstr, int *max_len, char *arg_str, char *arg)
-{
-	int len;
-
-	if (arg && strcmp(arg, "none")) {
-		len = snprintf(*argstr, *max_len, ",%s=%s", arg_str, arg);
-		if (len < 0)
-			return -EINVAL;
-		*argstr += len;
-		*max_len -= len;
-	}
-
-	return 0;
-}
-
-static int build_options(char *argstr, int max_len, bool discover)
-{
-	int len;
-
-	if (!cfg.transport) {
-		fprintf(stderr, "need a transport (-t) argument\n");
-		return -EINVAL;
-	}
-
-	if (strncmp(cfg.transport, "loop", 4)) {
-		if (!cfg.traddr) {
-			fprintf(stderr, "need a address (-a) argument\n");
-			return -EINVAL;
-		}
-	}
-
-	/* always specify nqn as first arg - this will init the string */
-	len = snprintf(argstr, max_len, "nqn=%s", cfg.nqn);
-	if (len < 0)
-		return -EINVAL;
-	argstr += len;
-	max_len -= len;
-
-	if (add_argument(&argstr, &max_len, "transport", cfg.transport) ||
-	    add_argument(&argstr, &max_len, "traddr", cfg.traddr) ||
-	    add_argument(&argstr, &max_len, "host_traddr", cfg.host_traddr) ||
-	    add_argument(&argstr, &max_len, "trsvcid", cfg.trsvcid) ||
-	    ((cfg.hostnqn || nvmf_hostnqn_file()) &&
-		    add_argument(&argstr, &max_len, "hostnqn", cfg.hostnqn)) ||
-	    ((cfg.hostid || nvmf_hostid_file()) &&
-		    add_argument(&argstr, &max_len, "hostid", cfg.hostid)) ||
-	    (!discover &&
-	      add_int_argument(&argstr, &max_len, "nr_io_queues",
-				cfg.nr_io_queues, false)) ||
-	    add_int_argument(&argstr, &max_len, "nr_write_queues",
-				cfg.nr_write_queues, false) ||
-	    add_int_argument(&argstr, &max_len, "nr_poll_queues",
-				cfg.nr_poll_queues, false) ||
-	    (!discover &&
-	      add_int_argument(&argstr, &max_len, "queue_size",
-				cfg.queue_size, false)) ||
-	    (!discover &&
-	      add_int_argument(&argstr, &max_len, "keep_alive_tmo",
-				cfg.keep_alive_tmo, false)) ||
-	    add_int_argument(&argstr, &max_len, "reconnect_delay",
-				cfg.reconnect_delay, false) ||
-	    add_int_argument(&argstr, &max_len, "ctrl_loss_tmo",
-				cfg.ctrl_loss_tmo, false) ||
-	    add_int_argument(&argstr, &max_len, "tos",
-				cfg.tos, true) ||
-	    add_bool_argument(&argstr, &max_len, "duplicate_connect",
-				cfg.duplicate_connect) ||
-	    add_bool_argument(&argstr, &max_len, "disable_sqflow",
-				cfg.disable_sqflow) ||
-	    add_bool_argument(&argstr, &max_len, "hdr_digest", cfg.hdr_digest) ||
-	    add_bool_argument(&argstr, &max_len, "data_digest", cfg.data_digest))
-		return -EINVAL;
-
-	return 0;
-}
 
 static int connect_ctrl(struct nvmf_disc_rsp_page_entry *e)
 {
-	char argstr[BUF_SIZE], *p;
+	bool discover = false, disable_sqflow = true;
 	const char *transport;
-	bool discover, disable_sqflow = true;
-	int len, ret;
+	char *argstr;
+	int ret;
 
 retry:
-	p = argstr;
-	discover = false;
-
 	switch (e->subtype) {
 	case NVME_NQN_DISC:
 		discover = true;
@@ -878,105 +672,11 @@ retry:
 		return -EINVAL;
 	}
 
-	len = sprintf(p, "nqn=%s", e->subnqn);
-	if (len < 0)
-		return -EINVAL;
-	p += len;
-
-	if (cfg.hostnqn && strcmp(cfg.hostnqn, "none")) {
-		len = sprintf(p, ",hostnqn=%s", cfg.hostnqn);
-		if (len < 0)
-			return -EINVAL;
-		p += len;
-	}
-
-	if (cfg.hostid && strcmp(cfg.hostid, "none")) {
-		len = sprintf(p, ",hostid=%s", cfg.hostid);
-		if (len < 0)
-			return -EINVAL;
-		p += len;
-	}
-
-	if (cfg.queue_size && !discover) {
-		len = sprintf(p, ",queue_size=%d", cfg.queue_size);
-		if (len < 0)
-			return -EINVAL;
-		p += len;
-	}
-
-	if (cfg.nr_io_queues && !discover) {
-		len = sprintf(p, ",nr_io_queues=%d", cfg.nr_io_queues);
-		if (len < 0)
-			return -EINVAL;
-		p += len;
-	}
-
-	if (cfg.nr_write_queues) {
-		len = sprintf(p, ",nr_write_queues=%d", cfg.nr_write_queues);
-		if (len < 0)
-			return -EINVAL;
-		p += len;
-	}
-
-	if (cfg.nr_poll_queues) {
-		len = sprintf(p, ",nr_poll_queues=%d", cfg.nr_poll_queues);
-		if (len < 0)
-			return -EINVAL;
-		p += len;
-	}
-
-	if (cfg.host_traddr && strcmp(cfg.host_traddr, "none")) {
-		len = sprintf(p, ",host_traddr=%s", cfg.host_traddr);
-		if (len < 0)
-			return -EINVAL;
-		p+= len;
-	}
-
-	if (cfg.ctrl_loss_tmo) {
-		len = sprintf(p, ",ctrl_loss_tmo=%d", cfg.ctrl_loss_tmo);
-		if (len < 0)
-			return -EINVAL;
-		p += len;
-	}
-
-	if (cfg.tos != -1) {
-		len = sprintf(p, ",tos=%d", cfg.tos);
-		if (len < 0)
-			return -EINVAL;
-		p += len;
-	}
-
-	if (cfg.keep_alive_tmo && !discover) {
-		len = sprintf(p, ",keep_alive_tmo=%d", cfg.keep_alive_tmo);
-		if (len < 0)
-			return -EINVAL;
-		p += len;
-	}
-
 	transport = trtype_str(e->trtype);
 	if (!strcmp(transport, "unrecognized")) {
 		fprintf(stderr, "skipping unsupported transport %d\n",
 				 e->trtype);
 		return -EINVAL;
-	}
-
-	len = sprintf(p, ",transport=%s", transport);
-	if (len < 0)
-		return -EINVAL;
-	p += len;
-
-	if (cfg.hdr_digest) {
-		len = sprintf(p, ",hdr_digest");
-		if (len < 0)
-			return -EINVAL;
-		p += len;
-	}
-
-	if (cfg.data_digest) {
-		len = sprintf(p, ",data_digest");
-		if (len < 0)
-			return -EINVAL;
-		p += len;
 	}
 
 	switch (e->trtype) {
@@ -985,20 +685,10 @@ retry:
 		switch (e->adrfam) {
 		case NVMF_ADDR_FAMILY_IP4:
 		case NVMF_ADDR_FAMILY_IP6:
-			/* FALLTHRU */
-			len = sprintf(p, ",traddr=%.*s",
-				      space_strip_len(NVMF_TRADDR_SIZE, e->traddr),
-				      e->traddr);
-			if (len < 0)
-				return -EINVAL;
-			p += len;
-
-			len = sprintf(p, ",trsvcid=%.*s",
-				      space_strip_len(NVMF_TRSVCID_SIZE, e->trsvcid),
-				      e->trsvcid);
-			if (len < 0)
-				return -EINVAL;
-			p += len;
+			space_strip_len(NVMF_TRADDR_SIZE, e->traddr);
+			space_strip_len(NVMF_TRSVCID_SIZE, e->trsvcid);
+			cfg.traddr = e->traddr;
+			cfg.traddr = e->trsvcid;
 			break;
 		default:
 			fprintf(stderr, "skipping unsupported adrfam\n");
@@ -1008,12 +698,8 @@ retry:
 	case NVMF_TRTYPE_FC:
 		switch (e->adrfam) {
 		case NVMF_ADDR_FAMILY_FC:
-			len = sprintf(p, ",traddr=%.*s",
-				      space_strip_len(NVMF_TRADDR_SIZE, e->traddr),
-				      e->traddr);
-			if (len < 0)
-				return -EINVAL;
-			p += len;
+			space_strip_len(NVMF_TRADDR_SIZE, e->traddr);
+			cfg.traddr = e->traddr;
 			break;
 		default:
 			fprintf(stderr, "skipping unsupported adrfam\n");
@@ -1022,17 +708,21 @@ retry:
 		break;
 	}
 
-	if (e->treq & NVMF_TREQ_DISABLE_SQFLOW && disable_sqflow) {
-		len = sprintf(p, ",disable_sqflow");
-		if (len < 0)
-			return -EINVAL;
-		p += len;
-	}
+	if (e->treq & NVMF_TREQ_DISABLE_SQFLOW && disable_sqflow)
+		cfg.disable_sqflow = true;
+
+	cfg.transport = (char *)transport;
+	cfg.nqn = e->subnqn;
+
+	if (build_options(&argstr, &cfg, discover))
+		return -ENOMEM;
 
 	if (discover)
 		ret = do_discover(argstr, true);
 	else
 		ret = add_ctrl(argstr);
+
+	free(argstr);
 	if (ret == -EINVAL && e->treq & NVMF_TREQ_DISABLE_SQFLOW) {
 		/* disable_sqflow param might not be supported, try without it */
 		disable_sqflow = false;
@@ -1056,13 +746,12 @@ static int connect_ctrls(struct nvmf_disc_rsp_page_hdr *log, int numrec)
 
 		/* already connected print message	*/
 		if (instance == -EALREADY) {
-			const char *traddr = log->entries[i].traddr;
+			char *traddr = log->entries[i].traddr;
 
-			if (!cfg.quiet)
+			space_strip_len(NVMF_TRADDR_SIZE, traddr);
+			if (!quiet)
 				fprintf(stderr,
-					"traddr=%.*s is already connected\n",
-					space_strip_len(NVMF_TRADDR_SIZE,
-							traddr),
+					"traddr=%s is already connected\n",
 					traddr);
 			continue;
 		}
@@ -1081,9 +770,8 @@ static int connect_ctrls(struct nvmf_disc_rsp_page_hdr *log, int numrec)
 static int do_discover(char *argstr, bool connect)
 {
 	struct nvmf_disc_rsp_page_hdr *log = NULL;
+	int instance, ret, numrec = 0, status = 0;
 	char *dev_name;
-	int instance, numrec = 0, ret, err;
-	int status = 0;
 
 	if (cfg.device) {
 		struct connect_args cargs;
@@ -1116,19 +804,22 @@ static int do_discover(char *argstr, bool connect)
 		free(cargs.host_traddr);
 	}
 
-	if (!cfg.device)
-		instance = add_ctrl(argstr);
-	else
+	if (cfg.device)
 		instance = ctrl_instance(cfg.device);
+	else
+		instance = add_ctrl(argstr);
+
 	if (instance < 0)
 		return instance;
 
 	if (asprintf(&dev_name, "/dev/nvme%d", instance) < 0)
 		return -errno;
+
 	ret = nvmf_get_log_page_discovery(dev_name, &log, &numrec, &status);
 	free(dev_name);
-	if (!cfg.device && !cfg.persistent) {
-		err = remove_ctrl(instance);
+	if (!cfg.device && !persistent) {
+		int err = remove_ctrl(instance);
+
 		if (err)
 			return err;
 	}
@@ -1137,7 +828,7 @@ static int do_discover(char *argstr, bool connect)
 	case DISC_OK:
 		if (connect)
 			ret = connect_ctrls(log, numrec);
-		else if (cfg.raw)
+		else if (raw)
 			save_discovery_log(log, numrec);
 		else
 			print_discovery_log(log, numrec);
@@ -1172,10 +863,20 @@ static int do_discover(char *argstr, bool connect)
 	return ret;
 }
 
-static int discover_from_conf_file(const char *desc, char *argstr,
+static int fabrics_build_options(char **argstr, bool discover)
+{
+	if (!cfg.hostnqn)
+		nvmf_hostnqn_file();
+	if (!cfg.hostid)
+		nvmf_hostid_file();
+	return build_options(argstr, &cfg, discover);
+}
+
+static int discover_from_conf_file(const char *desc,
 		const struct argconfig_commandline_options *opts, bool connect)
 {
 	FILE *f;
+	char *argstr;
 	char line[256], *ptr, *args, **argv;
 	int argc, err, ret = 0;
 
@@ -1214,10 +915,15 @@ static int discover_from_conf_file(const char *desc, char *argstr,
 		if (err)
 			continue;
 
-		if (cfg.persistent && !cfg.keep_alive_tmo)
+		if (persistent && !cfg.keep_alive_tmo)
 			cfg.keep_alive_tmo = NVMF_DEF_DISC_TMO;
 
-		err = build_options(argstr, BUF_SIZE, true);
+		if (!cfg.hostnqn)
+			nvmf_hostnqn_file();
+		if (!cfg.hostid)
+			nvmf_hostid_file();
+
+		err = fabrics_build_options(&argstr, true);
 		if (err) {
 			ret = err;
 			continue;
@@ -1229,6 +935,7 @@ static int discover_from_conf_file(const char *desc, char *argstr,
 			continue;
 		}
 
+		free(argstr);
 		free(args);
 		free(argv);
 	}
@@ -1240,7 +947,7 @@ out:
 
 int discover(const char *desc, int argc, char **argv, bool connect)
 {
-	char argstr[BUF_SIZE];
+	char *argstr;
 	int ret;
 
 	OPT_ARGS(opts) = {
@@ -1250,20 +957,20 @@ int discover(const char *desc, int argc, char **argv, bool connect)
 		OPT_LIST("host-traddr",    'w', &cfg.host_traddr,     "host traddr (e.g. FC WWN's)"),
 		OPT_LIST("hostnqn",        'q', &cfg.hostnqn,         "user-defined hostnqn (if default not used)"),
 		OPT_LIST("hostid",         'I', &cfg.hostid,          "user-defined hostid (if default not used)"),
-		OPT_LIST("raw",            'r', &cfg.raw,             "raw output file"),
+		OPT_LIST("raw",            'r', &raw,                 "raw output file"),
 		OPT_LIST("device",         'd', &cfg.device,          "use existing discovery controller device"),
 		OPT_INT("keep-alive-tmo",  'k', &cfg.keep_alive_tmo,  "keep alive timeout period in seconds"),
 		OPT_INT("reconnect-delay", 'c', &cfg.reconnect_delay, "reconnect timeout period in seconds"),
 		OPT_INT("ctrl-loss-tmo",   'l', &cfg.ctrl_loss_tmo,   "controller loss timeout period in seconds"),
 		OPT_INT("tos",             'T', &cfg.tos,             "type of service"),
-		OPT_FLAG("hdr_digest",     'g', &cfg.hdr_digest,      "enable transport protocol header digest (TCP transport)"),
-		OPT_FLAG("data_digest",    'G', &cfg.data_digest,     "enable transport protocol data digest (TCP transport)"),
+		OPT_FLAG("hdr-digest",     'g', &cfg.hdr_digest,      "enable transport protocol header digest (TCP transport)"),
+		OPT_FLAG("data-digest",    'G', &cfg.data_digest,     "enable transport protocol data digest (TCP transport)"),
 		OPT_INT("nr-io-queues",    'i', &cfg.nr_io_queues,    "number of io queues to use (default is core count)"),
 		OPT_INT("nr-write-queues", 'W', &cfg.nr_write_queues, "number of write queues to use (default 0)"),
 		OPT_INT("nr-poll-queues",  'P', &cfg.nr_poll_queues,  "number of poll queues to use (default 0)"),
 		OPT_INT("queue-size",      'Q', &cfg.queue_size,      "number of io queue elements to use (default 128)"),
-		OPT_FLAG("persistent",     'p', &cfg.persistent,      "persistent discovery connection"),
-		OPT_FLAG("quiet",          'S', &cfg.quiet,           "suppress already connected errors"),
+		OPT_FLAG("persistent",     'p', &persistent,          "persistent discovery connection"),
+		OPT_FLAG("quiet",          'S', &quiet,               "suppress already connected errors"),
 		OPT_END()
 	};
 
@@ -1278,24 +985,25 @@ int discover(const char *desc, int argc, char **argv, bool connect)
 	cfg.nqn = NVME_DISC_SUBSYS_NAME;
 
 	if (!cfg.transport && !cfg.traddr) {
-		ret = discover_from_conf_file(desc, argstr, opts, connect);
+		ret = discover_from_conf_file(desc, opts, connect);
 	} else {
-		if (cfg.persistent && !cfg.keep_alive_tmo)
+		if (persistent && !cfg.keep_alive_tmo)
 			cfg.keep_alive_tmo = NVMF_DEF_DISC_TMO;
-		ret = build_options(argstr, BUF_SIZE, true);
+
+		ret = fabrics_build_options(&argstr, true);
 		if (ret)
 			goto out;
 
 		ret = do_discover(argstr, connect);
+		free(argstr);
 	}
-
 out:
 	return nvme_status_to_errno(ret, true);
 }
 
 int connect(const char *desc, int argc, char **argv)
 {
-	char argstr[BUF_SIZE];
+	char *argstr;
 	int instance, ret;
 
 	OPT_ARGS(opts) = {
@@ -1326,20 +1034,20 @@ int connect(const char *desc, int argc, char **argv)
 	if (ret)
 		goto out;
 
-	ret = build_options(argstr, BUF_SIZE, false);
-	if (ret)
-		goto out;
-
 	if (!cfg.nqn) {
-		fprintf(stderr, "need a -n argument\n");
+		fprintf(stderr, "nqn not specified, need a -n argument\n");
 		ret = -EINVAL;
 		goto out;
 	}
 
+	ret = fabrics_build_options(&argstr, false);
+	if (ret)
+		goto out;
+
 	instance = add_ctrl(argstr);
 	if (instance < 0)
 		ret = instance;
-
+	free(argstr);
 out:
 	return nvme_status_to_errno(ret, true);
 }

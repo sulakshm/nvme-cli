@@ -8,7 +8,6 @@
 #include <sys/stat.h>
 #include "nvme.h"
 #include "nvme-print.h"
-#include "nvme-ioctl.h"
 #include <sys/ioctl.h>
 
 #define CREATE_CMD

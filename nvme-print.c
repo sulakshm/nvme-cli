@@ -26,7 +26,7 @@ static long double int128_to_double(__u8 *data)
 	return result;
 }
 
-static const char *nvme_ana_state_to_string(enum nvme_ana_state state)
+static const char *nvme_ana_state_to_string(__u8 state)
 {
 	switch (state) {
 	case NVME_ANA_OPTIMIZED:
@@ -73,6 +73,7 @@ static const char *nvme_cmd_to_string(int admin, __u8 opcode)
 		case nvme_admin_security_send:	return "Security Send";
 		case nvme_admin_security_recv:	return "Security Receive";
 		case nvme_admin_sanitize_nvm:	return "Sanitize";
+		case nvme_admin_get_lba_status:	return "Get LBA Status";
 		}
 	} else {
 		switch (opcode) {
@@ -83,6 +84,7 @@ static const char *nvme_cmd_to_string(int admin, __u8 opcode)
 		case nvme_cmd_compare:		return "Compare";
 		case nvme_cmd_write_zeroes:	return "Write Zeroes";
 		case nvme_cmd_dsm:		return "Dataset Management";
+		case nvme_cmd_verify:		return "Verify";
 		case nvme_cmd_resv_register:	return "Reservation Register";
 		case nvme_cmd_resv_report:	return "Reservation Report";
 		case nvme_cmd_resv_acquire:	return "Reservation Acquire";
@@ -157,9 +159,13 @@ static void json_nvme_id_ns(struct nvme_id_ns *ns, unsigned int mode)
 	json_object_add_value_int(root, "nmic", ns->nmic);
 	json_object_add_value_int(root, "rescap", ns->rescap);
 	json_object_add_value_int(root, "fpi", ns->fpi);
-	json_object_add_value_int(root, "nawun", le16_to_cpu(ns->nawun));
-	json_object_add_value_int(root, "nawupf", le16_to_cpu(ns->nawupf));
-	json_object_add_value_int(root, "nacwu", le16_to_cpu(ns->nacwu));
+
+	if (ns->nsfeat & NVME_NS_FEAT_NATOMIC) {
+		json_object_add_value_int(root, "nawun", le16_to_cpu(ns->nawun));
+		json_object_add_value_int(root, "nawupf", le16_to_cpu(ns->nawupf));
+		json_object_add_value_int(root, "nacwu", le16_to_cpu(ns->nacwu));
+	}
+
 	json_object_add_value_int(root, "nabsn", le16_to_cpu(ns->nabsn));
 	json_object_add_value_int(root, "nabo", le16_to_cpu(ns->nabo));
 	json_object_add_value_int(root, "nabspf", le16_to_cpu(ns->nabspf));
@@ -168,7 +174,7 @@ static void json_nvme_id_ns(struct nvme_id_ns *ns, unsigned int mode)
 	json_object_add_value_int(root, "nsattr", ns->nsattr);
 	json_object_add_value_int(root, "nvmsetid", le16_to_cpu(ns->nvmsetid));
 
-	if (ns->nsfeat & 0x10) {
+	if (ns->nsfeat & NVME_NS_FEAT_IO_OPT) {
 		json_object_add_value_int(root, "npwg", le16_to_cpu(ns->npwg));
 		json_object_add_value_int(root, "npwa", le16_to_cpu(ns->npwa));
 		json_object_add_value_int(root, "npdg", le16_to_cpu(ns->npdg));
@@ -710,7 +716,7 @@ static void json_ana_log(struct nvme_ana_rsp_hdr *ana_log, const char *devname)
 		json_array_add_value_object(desc_list, desc);
 	}
 
-	json_object_add_value_array(root, "ANA DESC LIST ", desc_list);
+	json_object_add_value_array(root, "ANA DESC LIST", desc_list);
 	json_print_object(root, NULL);
 	printf("\n");
 	json_free_object(root);
@@ -924,33 +930,34 @@ void nvme_show_subsystem_list(struct nvme_topology *t,
 		nvme_show_subsystem(&t->subsystems[i]);
 }
 
-static void nvme_show_registers_cap(struct nvme_bar_cap *cap)
+static void nvme_show_registers_cap(uint64_t cap)
 {
-	printf("\tController Memory Buffer Supported (CMBS): The Controller Memory Buffer is %s\n",
-		((cap->rsvd_cmbs_pmrs & 0x02) >> 1) ? "Supported" :
-			"Not Supported");
-	printf("\tPersistent Memory Region Supported (PMRS): The Persistent Memory Region is %s\n",
-		(cap->rsvd_cmbs_pmrs & 0x01) ? "Supported" : "Not Supported");
+	printf("\tController Memory Buffer Supported (CMBS): %s\n",
+		NVME_CAP_CMBS(cap) ? "Supported" : "Not Supported");
+	printf("\tPersistent Memory Region Supported (PMRS): %s\n",
+		NVME_CAP_PMRS(cap) ? "Supported" : "Not Supported");
 	printf("\tMemory Page Size Maximum	   (MPSMAX): %u bytes\n",
-		1 <<  (12 + ((cap->mpsmax_mpsmin & 0xf0) >> 4)));
+		1 <<  (12 + (NVME_CAP_MPSMIN(cap))));
 	printf("\tMemory Page Size Minimum         (MPSMIN): %u bytes\n",
-		1 <<  (12 + (cap->mpsmax_mpsmin & 0x0f)));
+		1 <<  (12 + (NVME_CAP_MPSMAX(cap))));
 	printf("\tBoot Partition Support              (BPS): %s\n",
-		(cap->bps_css_nssrs_dstrd & 0x2000) ? "Yes":"No");
-	printf("\tCommand Sets Supported              (CSS): NVM command set is %s\n",
-		(cap->bps_css_nssrs_dstrd & 0x0020) ? "supported":"not supported");
+		NVME_CAP_BPS(cap) ? "Yes":"No");
+	printf("\tCommand Sets Supported              (CSS):\n");
+	printf("\t\tNVM command set is %s\n",
+		NVME_CAP_CSS(cap) & 1 ? "supported":"not supported");
 	printf("\tNVM Subsystem Reset Supported     (NSSRS): %s\n",
-		(cap->bps_css_nssrs_dstrd & 0x0010) ? "Yes":"No");
+		NVME_CAP_NSSRC(cap) ? "Yes":"No");
 	printf("\tDoorbell Stride                   (DSTRD): %u bytes\n",
-		1 << (2 + (cap->bps_css_nssrs_dstrd & 0x000f)));
+		1 << (2 + NVME_CAP_STRIDE(cap)));
 	printf("\tTimeout                              (TO): %u ms\n",
-		cap->to * 500);
-	printf("\tArbitration Mechanism Supported     (AMS): Weighted Round Robin with Urgent Priority Class is %s\n",
-		(cap->ams_cqr & 0x02) ? "supported":"not supported");
+		(uint32_t)NVME_CAP_TIMEOUT(cap) * 500);
+	printf("\tArbitration Mechanism Supported     (AMS):\n");
+	printf("\t\tWeighted Round Robin with Urgent Priority Class is %s\n",
+		NVME_CAP_AMS(cap) & 0x02 ? "supported":"not supported");
 	printf("\tContiguous Queues Required	      (CQR): %s\n",
-		(cap->ams_cqr & 0x01) ? "Yes":"No");
+		NVME_CAP_CQR(cap) ? "Yes":"No");
 	printf("\tMaximum Queue Entries Supported    (MQES): %u\n\n",
-		cap->mqes + 1);
+		(uint32_t)NVME_CAP_MQES(cap) + 1);
 }
 
 static void nvme_show_registers_version(__u32 vs)
@@ -998,17 +1005,18 @@ static void nvme_show_registers_cc_shn (__u8 shn)
 static void nvme_show_registers_cc(__u32 cc)
 {
 	printf("\tI/O Completion Queue Entry Size (IOCQES): %u bytes\n",
-		1 << ((cc & 0x00f00000) >> NVME_CC_IOCQES_SHIFT));
+		1 << ((cc >> NVME_CC_IOCQES_SHIFT) & 0xf));
 	printf("\tI/O Submission Queue Entry Size (IOSQES): %u bytes\n",
-		1 << ((cc & 0x000f0000) >> NVME_CC_IOSQES_SHIFT));
-	nvme_show_registers_cc_shn((cc & 0x0000c000) >> NVME_CC_SHN_SHIFT);
-	nvme_show_registers_cc_ams((cc & 0x00003800) >> NVME_CC_AMS_SHIFT);
+		1 << ((cc >> NVME_CC_IOSQES_SHIFT) & 0xf));
+	nvme_show_registers_cc_shn((cc >> NVME_CC_SHN_SHIFT) & 0x3);
+	nvme_show_registers_cc_ams((cc >> NVME_CC_AMS_SHIFT) & 0xf);
 	printf("\tMemory Page Size                   (MPS): %u bytes\n",
-		1 << (12 + ((cc & 0x00000780) >> NVME_CC_MPS_SHIFT)));
+		1 << (12 + ((cc >> NVME_CC_MPS_SHIFT) & 0xf)));
 	printf("\tI/O Command Sets Selected          (CSS): %s\n",
-		(cc & 0x00000070) ? "Reserved":"NVM Command Set");
+		((cc >> NVME_CC_CSS_SHIFT) & 0x7) == NVME_CC_CSS_NVM ?
+				"NVM Command Set" : "Reserved");
 	printf("\tEnable                              (EN): %s\n\n",
-		(cc & 0x00000001) ? "Yes":"No");
+		(cc & 0x1) ? "Yes":"No");
 }
 
 static void nvme_show_registers_csts_shst(__u8 shst)
@@ -1032,23 +1040,23 @@ static void nvme_show_registers_csts_shst(__u8 shst)
 static void nvme_show_registers_csts(__u32 csts)
 {
 	printf("\tProcessing Paused               (PP): %s\n",
-		(csts & 0x00000020) ? "Yes":"No");
+		(csts & NVME_CSTS_PP) ? "Yes" : "No");
 	printf("\tNVM Subsystem Reset Occurred (NSSRO): %s\n",
-		(csts & 0x00000010) ? "Yes":"No");
-	nvme_show_registers_csts_shst((csts & 0x0000000c) >> 2);
+		(csts & NVME_CSTS_NSSRO	) ? "Yes" : "No");
+	nvme_show_registers_csts_shst((csts >> 2) & 0x3);
 	printf("\tController Fatal Status        (CFS): %s\n",
-		(csts & 0x00000002) ? "True":"False");
+		(csts & NVME_CSTS_CFS) ? "True" : "False");
 	printf("\tReady                          (RDY): %s\n\n",
-		(csts & 0x00000001) ? "Yes":"No");
+		(csts & NVME_CSTS_RDY) ? "Yes" : "No");
 
 }
 
 static void nvme_show_registers_aqa(__u32 aqa)
 {
 	printf("\tAdmin Completion Queue Size (ACQS): %u\n",
-		((aqa & 0x0fff0000) >> 16) + 1);
+		((aqa >> 16) & 0xfff) + 1);
 	printf("\tAdmin Submission Queue Size (ASQS): %u\n\n",
-		(aqa & 0x00000fff) + 1);
+		(aqa & 0xfff) + 1);
 
 }
 
@@ -1401,7 +1409,7 @@ void nvme_show_ctrl_registers(void *bar, bool fabrics, enum nvme_print_flags fla
 	if (human) {
 		if (cap != 0xffffffff) {
 			printf("cap     : %"PRIx64"\n", cap);
-			nvme_show_registers_cap((struct nvme_bar_cap *)&cap);
+			nvme_show_registers_cap(cap);
 		}
 		if (vs != 0xffffffff) {
 			printf("version : %x\n", vs);
@@ -1534,7 +1542,7 @@ void nvme_show_single_property(int offset, uint64_t value64, int human)
 	switch (offset) {
 	case NVME_REG_CAP:
 		printf("cap : %"PRIx64"\n", value64);
-		nvme_show_registers_cap((struct nvme_bar_cap *)&value64);
+		nvme_show_registers_cap(value64);
 		break;
 
 	case NVME_REG_VS:
@@ -2232,20 +2240,25 @@ static void nvme_show_id_ctrl_ctrattr(__u8 ctrattr)
 static void nvme_show_id_ns_nsfeat(__u8 nsfeat)
 {
 	__u8 rsvd = (nsfeat & 0xE0) >> 5;
-	__u8 ioopt = (nsfeat & 0x10) >> 4;
-	__u8 dulbe = (nsfeat & 0x4) >> 2;
-	__u8 na = (nsfeat & 0x2) >> 1;
-	__u8 thin = nsfeat & 0x1;
+	__u8 ioopt = nsfeat & NVME_NS_FEAT_IO_OPT;
+	__u8 id_reuse = nsfeat & NVME_NS_FEAT_ID_REUSE;
+	__u8 dulbe = nsfeat & NVME_NS_FEAT_DULBE;
+	__u8 na = nsfeat & NVME_NS_FEAT_NATOMIC;
+	__u8 thin = nsfeat & NVME_NS_FEAT_THIN;
+
 	if (rsvd)
 		printf("  [7:5] : %#x\tReserved\n", rsvd);
 	printf("  [4:4] : %#x\tNPWG, NPWA, NPDG, NPDA, and NOWS are %sSupported\n",
-		ioopt, ioopt ? "" : "Not ");
+		!!ioopt, ioopt ? "" : "Not ");
+	printf("  [3:3] : %#x\tEUI64/NGUID reuse is %sSupported\n",
+		!!id_reuse, id_reuse? "" : "Not ");
 	printf("  [2:2] : %#x\tDeallocated or Unwritten Logical Block error %sSupported\n",
-		dulbe, dulbe ? "" : "Not ");
+		!!dulbe, dulbe ? "" : "Not ");
 	printf("  [1:1] : %#x\tNamespace uses %s\n",
-		na, na ? "NAWUN, NAWUPF, and NACWU" : "AWUN, AWUPF, and ACWU");
+		!!na, na ? "NAWUN, NAWUPF, and NACWU" :
+			"AWUN, AWUPF, and ACWU");
 	printf("  [0:0] : %#x\tThin Provisioning %sSupported\n",
-		thin, thin ? "" : "Not ");
+		!!thin, thin ? "" : "Not ");
 	printf("\n");
 }
 
@@ -2265,94 +2278,99 @@ static void nvme_show_id_ns_flbas(__u8 flbas)
 static void nvme_show_id_ns_mc(__u8 mc)
 {
 	__u8 rsvd = (mc & 0xFC) >> 2;
-	__u8 mdp = (mc & 0x2) >> 1;
-	__u8 extdlba = mc & 0x1;
+	__u8 mdp = mc & NVME_NS_MC_SEPARATE;
+	__u8 extdlba = mc & NVME_NS_MC_EXTENDED;
+
 	if (rsvd)
 		printf("  [7:2] : %#x\tReserved\n", rsvd);
 	printf("  [1:1] : %#x\tMetadata Pointer %sSupported\n",
-		mdp, mdp ? "" : "Not ");
+		!!mdp, mdp ? "" : "Not ");
 	printf("  [0:0] : %#x\tMetadata as Part of Extended Data LBA %sSupported\n",
-		extdlba, extdlba ? "" : "Not ");
+		!!extdlba, extdlba ? "" : "Not ");
 	printf("\n");
 }
 
 static void nvme_show_id_ns_dpc(__u8 dpc)
 {
 	__u8 rsvd = (dpc & 0xE0) >> 5;
-	__u8 pil8 = (dpc & 0x10) >> 4;
-	__u8 pif8 = (dpc & 0x8) >> 3;
-	__u8 pit3 = (dpc & 0x4) >> 2;
-	__u8 pit2 = (dpc & 0x2) >> 1;
-	__u8 pit1 = dpc & 0x1;
+	__u8 pil8 = dpc & NVME_NS_DPC_PI_LAST;
+	__u8 pif8 = dpc & NVME_NS_DPC_PI_FIRST;
+	__u8 pit3 = dpc & NVME_NS_DPC_PI_TYPE3;
+	__u8 pit2 = dpc & NVME_NS_DPC_PI_TYPE2;
+	__u8 pit1 = dpc & NVME_NS_DPC_PI_TYPE1;
+
 	if (rsvd)
 		printf("  [7:5] : %#x\tReserved\n", rsvd);
 	printf("  [4:4] : %#x\tProtection Information Transferred as Last 8 Bytes of Metadata %sSupported\n",
-		pil8, pil8 ? "" : "Not ");
+		!!pil8, pil8 ? "" : "Not ");
 	printf("  [3:3] : %#x\tProtection Information Transferred as First 8 Bytes of Metadata %sSupported\n",
-		pif8, pif8 ? "" : "Not ");
+		!!pif8, pif8 ? "" : "Not ");
 	printf("  [2:2] : %#x\tProtection Information Type 3 %sSupported\n",
-		pit3, pit3 ? "" : "Not ");
+		!!pit3, pit3 ? "" : "Not ");
 	printf("  [1:1] : %#x\tProtection Information Type 2 %sSupported\n",
-		pit2, pit2 ? "" : "Not ");
+		!!pit2, pit2 ? "" : "Not ");
 	printf("  [0:0] : %#x\tProtection Information Type 1 %sSupported\n",
-		pit1, pit1 ? "" : "Not ");
+		!!pit1, pit1 ? "" : "Not ");
 	printf("\n");
 }
 
 static void nvme_show_id_ns_dps(__u8 dps)
 {
 	__u8 rsvd = (dps & 0xF0) >> 4;
-	__u8 pif8 = (dps & 0x8) >> 3;
-	__u8 pit = dps & 0x7;
+	__u8 pif8 = dps & NVME_NS_DPS_PI_FIRST;
+	__u8 pit = dps & NVME_NS_DPS_PI_MASK;
+
 	if (rsvd)
 		printf("  [7:4] : %#x\tReserved\n", rsvd);
 	printf("  [3:3] : %#x\tProtection Information is Transferred as %s 8 Bytes of Metadata\n",
-		pif8, pif8 ? "First" : "Last");
+		!!pif8, pif8 ? "First" : "Last");
 	printf("  [2:0] : %#x\tProtection Information %s\n", pit,
 		pit == 3 ? "Type 3 Enabled" :
-		pit == 2 ? "Type 2 Enabled" :
-		pit == 1 ? "Type 1 Enabled" :
-		pit == 0 ? "Disabled" : "Reserved Enabled");
+			pit == 2 ? "Type 2 Enabled" :
+			pit == 1 ? "Type 1 Enabled" :
+			pit == 0 ? "Disabled" : "Reserved Enabled");
 	printf("\n");
 }
 
 static void nvme_show_id_ns_nmic(__u8 nmic)
 {
 	__u8 rsvd = (nmic & 0xFE) >> 1;
-	__u8 mp = nmic & 0x1;
+	__u8 mp = nmic & NVME_NS_NMIC_SHARED;
+
 	if (rsvd)
 		printf("  [7:1] : %#x\tReserved\n", rsvd);
 	printf("  [0:0] : %#x\tNamespace Multipath %sCapable\n",
-		mp, mp ? "" : "Not ");
+		!!mp, mp ? "" : "Not ");
 	printf("\n");
 }
 
 static void nvme_show_id_ns_rescap(__u8 rescap)
 {
-	__u8 rsvd = (rescap & 0x80) >> 7;
-	__u8 eaar = (rescap & 0x40) >> 6;
-	__u8 wear = (rescap & 0x20) >> 5;
-	__u8 earo = (rescap & 0x10) >> 4;
-	__u8 wero = (rescap & 0x8) >> 3;
-	__u8 ea = (rescap & 0x4) >> 2;
-	__u8 we = (rescap & 0x2) >> 1;
-	__u8 ptpl = rescap & 0x1;
-	if (rsvd)
-		printf("  [7:7] : %#x\tReserved\n", rsvd);
+	__u8 iek13 = rescap & NVME_RESCAP_IEK_13;
+	__u8 eaar = rescap & NVME_RESCAP_EAAR;
+	__u8 wear = rescap & NVME_RESCAP_WEAR;
+	__u8 earo = rescap & NVME_RESCAP_EARO;
+	__u8 wero = rescap & NVME_RESCAP_WERO;
+	__u8 ea = rescap & NVME_RESCAP_EA;
+	__u8 we = rescap & NVME_RESCAP_WE;
+	__u8 ptpl = rescap & NVME_RESCAP_PTPL;
+
+	printf("  [7:7] : %#x\tIgnore Key uses version %s definition\n",
+		!!iek13, iek13 ? ">=1.3" : "<=1.2.1");
 	printf("  [6:6] : %#x\tExclusive Access - All Registrants %sSupported\n",
-		eaar, eaar ? "" : "Not ");
+		!!eaar, eaar ? "" : "Not ");
 	printf("  [5:5] : %#x\tWrite Exclusive - All Registrants %sSupported\n",
-		wear, wear ? "" : "Not ");
+		!!wear, wear ? "" : "Not ");
 	printf("  [4:4] : %#x\tExclusive Access - Registrants Only %sSupported\n",
-		earo, earo ? "" : "Not ");
+		!!earo, earo ? "" : "Not ");
 	printf("  [3:3] : %#x\tWrite Exclusive - Registrants Only %sSupported\n",
-		wero, wero ? "" : "Not ");
+		!!wero, wero ? "" : "Not ");
 	printf("  [2:2] : %#x\tExclusive Access %sSupported\n",
-		ea, ea ? "" : "Not ");
+		!!ea, ea ? "" : "Not ");
 	printf("  [1:1] : %#x\tWrite Exclusive %sSupported\n",
-		we, we ? "" : "Not ");
+		!!we, we ? "" : "Not ");
 	printf("  [0:0] : %#x\tPersist Through Power Loss %sSupported\n",
-		ptpl, ptpl ? "" : "Not ");
+		!!ptpl, ptpl ? "" : "Not ");
 	printf("\n");
 }
 
@@ -2431,21 +2449,27 @@ void nvme_show_id_ns(struct nvme_id_ns *ns, unsigned int nsid,
 	printf("dlfeat  : %d\n", ns->dlfeat);
 	if (human)
 		nvme_show_id_ns_dlfeat(ns->dlfeat);
-	printf("nawun   : %d\n", le16_to_cpu(ns->nawun));
-	printf("nawupf  : %d\n", le16_to_cpu(ns->nawupf));
-	printf("nacwu   : %d\n", le16_to_cpu(ns->nacwu));
+
+	if (ns->nsfeat & NVME_NS_FEAT_NATOMIC) {
+		printf("nawun   : %d\n", le16_to_cpu(ns->nawun));
+		printf("nawupf  : %d\n", le16_to_cpu(ns->nawupf));
+		printf("nacwu   : %d\n", le16_to_cpu(ns->nacwu));
+	}
+
 	printf("nabsn   : %d\n", le16_to_cpu(ns->nabsn));
 	printf("nabo    : %d\n", le16_to_cpu(ns->nabo));
 	printf("nabspf  : %d\n", le16_to_cpu(ns->nabspf));
 	printf("noiob   : %d\n", le16_to_cpu(ns->noiob));
 	printf("nvmcap  : %.0Lf\n", int128_to_double(ns->nvmcap));
-	if (ns->nsfeat & 0x10) {
+
+	if (ns->nsfeat & NVME_NS_FEAT_IO_OPT) {
 		printf("npwg    : %u\n", le16_to_cpu(ns->npwg));
 		printf("npwa    : %u\n", le16_to_cpu(ns->npwa));
 		printf("npdg    : %u\n", le16_to_cpu(ns->npdg));
 		printf("npda    : %u\n", le16_to_cpu(ns->npda));
 		printf("nows    : %u\n", le16_to_cpu(ns->nows));
 	}
+
 	printf("nsattr	: %u\n", ns->nsattr);
 	printf("nvmsetid: %d\n", le16_to_cpu(ns->nvmsetid));
 	printf("anagrpid: %u\n", le32_to_cpu(ns->anagrpid));
@@ -3289,15 +3313,15 @@ void nvme_show_changed_ns_list_log(struct nvme_changed_ns_list_log *log,
 
 static void nvme_show_effects_log_human(__u32 effect)
 {
-	const char *set = "+";
-	const char *clr = "-";
+	const char set = '+';
+	const char clr = '-';
 
 	printf("  CSUPP+");
-	printf("  LBCC%s", (effect & NVME_CMD_EFFECTS_LBCC) ? set : clr);
-	printf("  NCC%s", (effect & NVME_CMD_EFFECTS_NCC) ? set : clr);
-	printf("  NIC%s", (effect & NVME_CMD_EFFECTS_NIC) ? set : clr);
-	printf("  CCC%s", (effect & NVME_CMD_EFFECTS_CCC) ? set : clr);
-	printf("  USS%s", (effect & NVME_CMD_EFFECTS_UUID_SEL) ? set : clr);
+	printf("  LBCC%c", (effect & NVME_CMD_EFFECTS_LBCC) ? set : clr);
+	printf("  NCC%c", (effect & NVME_CMD_EFFECTS_NCC) ? set : clr);
+	printf("  NIC%c", (effect & NVME_CMD_EFFECTS_NIC) ? set : clr);
+	printf("  CCC%c", (effect & NVME_CMD_EFFECTS_CCC) ? set : clr);
+	printf("  USS%c", (effect & NVME_CMD_EFFECTS_UUID_SEL) ? set : clr);
 
 	if ((effect & NVME_CMD_EFFECTS_CSE_MASK) >> 16 == 0)
 		printf("  No command restriction\n");
@@ -3466,7 +3490,6 @@ void nvme_show_ana_log(struct nvme_ana_rsp_hdr *ana_log, const char *devname,
 			enum nvme_print_flags flags, size_t len)
 {
 	int offset = sizeof(struct nvme_ana_rsp_hdr);
-	struct nvme_ana_rsp_hdr *hdr = ana_log;
 	struct nvme_ana_group_desc *desc;
 	size_t nsid_buf_size;
 	void *base = ana_log;
@@ -3481,9 +3504,8 @@ void nvme_show_ana_log(struct nvme_ana_rsp_hdr *ana_log, const char *devname,
 	printf("Asynchronous Namespace Access Log for NVMe device: %s\n",
 			devname);
 	printf("ANA LOG HEADER :-\n");
-	printf("chgcnt	:	%"PRIu64"\n",
-			le64_to_cpu(hdr->chgcnt));
-	printf("ngrps	:	%u\n", le16_to_cpu(hdr->ngrps));
+	printf("chgcnt	:	%"PRIu64"\n", le64_to_cpu(ana_log->chgcnt));
+	printf("ngrps	:	%u\n", le16_to_cpu(ana_log->ngrps));
 	printf("ANA Log Desc :-\n");
 
 	for (i = 0; i < le16_to_cpu(ana_log->ngrps); i++) {
@@ -3961,19 +3983,21 @@ static const char *nvme_feature_temp_sel_to_string(__u8 sel)
 	}
 }
 
-static void nvme_show_auto_pst(struct nvme_auto_pst *apst)
+static void nvme_show_auto_pst(struct nvme_feat_auto_pst *apst)
 {
 	int i;
 
 	printf( "\tAuto PST Entries");
 	printf("\t.................\n");
 	for (i = 0; i < 32; i++) {
+		__u64 value = le64_to_cpu(apst->entry[i]);
+
 		printf("\tEntry[%2d]   \n", i);
 		printf("\t.................\n");
 		printf("\tIdle Time Prior to Transition (ITPT): %u ms\n",
-			(apst[i].data & 0xffffff00) >> 8);
+			(uint32_t)(value & 0xffffff00) >> 8);
 		printf("\tIdle Transition Power State   (ITPS): %u\n",
-			(apst[i].data & 0x000000f8) >> 3);
+			(uint32_t)(value & 0x000000f8) >> 3);
 		printf("\t.................\n");
 	}
 }
@@ -4075,7 +4099,7 @@ static void nvme_directive_show_fields(__u8 dtype, __u8 doper,
 		}
 		break;
 	default:
-		fprintf(stderr, "invalid directive type\n");
+		fprintf(stderr, "unknown directive type\n");
 		break;
 	}
 	return;
@@ -4181,7 +4205,7 @@ void nvme_feature_show_fields(__u32 fid, unsigned int result, unsigned char *buf
 		break;
 	case NVME_FEAT_AUTO_PST:
 		printf("\tAutonomous Power State Transition Enable (APSTE): %s\n", (result & 0x00000001) ? "Enabled":"Disabled");
-		nvme_show_auto_pst((struct nvme_auto_pst *)buf);
+		nvme_show_auto_pst((struct nvme_feat_auto_pst *)buf);
 		break;
 	case NVME_FEAT_HOST_MEM_BUF:
 		printf("\tMemory Return       (MR): %s\n", ((result & 0x00000002) >> 1) ? "True":"False");

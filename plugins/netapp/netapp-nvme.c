@@ -24,7 +24,6 @@
 #include <sys/ioctl.h>
 
 #include "nvme.h"
-#include "nvme-ioctl.h"
 #include "json.h"
 
 #include "suffix.h"
@@ -440,7 +439,8 @@ static int netapp_ontapdevices_get_info(int fd, struct ontapdevice_info *item,
 		return 0;
 	}
 
-	err = nvme_identify_ns_descs(fd, item->nsid, item->nsdesc);
+	err = nvme_identify_ns_descs(fd, item->nsid,
+		(struct nvme_ns_id_desc *)item->nsdesc);
 	if (err) {
 		fprintf(stderr, "Unable to identify namespace descriptor for %s (%s)\n",
 				dev, strerror(err));

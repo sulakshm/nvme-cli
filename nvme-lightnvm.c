@@ -32,7 +32,6 @@
 
 #include "nvme-lightnvm.h"
 #include "nvme-print.h"
-#include "nvme-ioctl.h"
 
 static int lnvm_open(void)
 {
