@@ -52,7 +52,6 @@
 #include "common.h"
 #include "nvme.h"
 #include "nvme-print.h"
-#include "nvme-status.h"
 #include "nvme-lightnvm.h"
 #include "plugin.h"
 

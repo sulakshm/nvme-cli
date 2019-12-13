@@ -11,4 +11,12 @@ static inline __u8 nvme_status_type(__u16 status)
 	return (status & 0x700) >> 8;
 }
 
+/*
+ * nvme_status_to_errno() - Converts nvme return status to errno
+ * @status: >= 0 for nvme status field in completion queue entry,
+ *          < 0 for linux internal errors
+ * @fabrics: true if given status is for fabrics
+ *
+ * Notes: This function will convert a given status to an errno
+ */
 __u8 nvme_status_to_errno(int status, bool fabrics);

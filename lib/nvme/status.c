@@ -3,7 +3,7 @@
 #include <errno.h>
 
 #include "nvme.h"
-#include "nvme-status.h"
+#include "status.h"
 
 static inline __u8 nvme_generic_status_to_errno(__u16 status)
 {
@@ -116,14 +116,6 @@ static inline __u8 nvme_fabrics_status_to_errno(__u16 status)
 	return EIO;
 }
 
-/*
- * nvme_status_to_errno - It converts given status to errno mapped
- * @status: >= 0 for nvme status field in completion queue entry,
- *          < 0 for linux internal errors
- * @fabrics: true if given status is for fabrics
- *
- * Notes: This function will convert a given status to an errno mapped
- */
 __u8 nvme_status_to_errno(int status, bool fabrics)
 {
 	__u8 sct;

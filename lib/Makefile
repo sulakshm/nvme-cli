@@ -48,11 +48,11 @@ endif
 
 all: $(all_targets)
 
-libnvme_srcs := nvme/ioctl.c nvme/fabrics.c nvme/filters.c nvme/models.c
+libnvme_srcs := nvme/ioctl.c nvme/fabrics.c nvme/filters.c nvme/models.c nvme/status.c
 libnvme_objs := $(patsubst %.c,%.ol,$(libnvme_srcs))
 libnvme_sobjs := $(patsubst %.c,%.os,$(libnvme_srcs))
 
-$(libnvme_objs) $(libnvme_sobjs): libnvme.h nvme/nvme.h nvme/ioctl.h nvme/filters.h nvme/models.h
+$(libnvme_objs) $(libnvme_sobjs): libnvme.h nvme/nvme.h nvme/ioctl.h nvme/filters.h nvme/models.h nvme/status.h
 
 %.os: %.c
 	$(QUIET_CC)$(CC) $(SO_CFLAGS) -c -o $@ $<
@@ -76,6 +76,7 @@ install: $(all_targets) $(NAME).pc
 	$(INSTALL) -D -m 644 nvme/fabrics.h $(includedir)/nvme/fabrics.h
 	$(INSTALL) -D -m 644 nvme/filters.h $(includedir)/nvme/filters.h
 	$(INSTALL) -D -m 644 nvme/models.h $(includedir)/nvme/models.h
+	$(INSTALL) -D -m 644 nvme/status.h $(includedir)/nvme/status.h
 	$(INSTALL) -D -m 644 libnvme.h $(includedir)/libnvme.h
 	$(INSTALL) -D -m 644 libnvme.a $(libdir)/libnvme.a
 	$(INSTALL) -D -m 644 $(NAME).pc $(DESTDIR)$(libdir)/pkgconfig/$(NAME).pc

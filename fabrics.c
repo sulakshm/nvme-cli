@@ -33,12 +33,8 @@
 #include <sys/stat.h>
 #include <stddef.h>
 
-#include "nvme-status.h"
 #include "fabrics.h"
-
 #include "nvme.h"
-#include "util/argconfig.h"
-
 #include "common.h"
 
 #ifdef HAVE_SYSTEMD

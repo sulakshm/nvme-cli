@@ -20,5 +20,6 @@
 #include "nvme/fabrics.h"
 #include "nvme/filters.h"
 #include "nvme/models.h"
+#include "nvme/status.h"
 
 #endif /* _LINUX_NVME_H */

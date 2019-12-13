@@ -73,6 +73,7 @@
 		nvme_scan_subsys_filter;
 		nvme_scan_dev_instance_namespaces;
 		nvme_product_name;
+		nvme_status_to_errno;
 	local:
 		*;
 };

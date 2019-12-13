@@ -52,7 +52,7 @@ override CFLAGS += -DNVME_VERSION='"$(NVME_VERSION)"'
 NVME_DPKG_VERSION=1~`lsb_release -sc`
 
 OBJS := nvme-print.o nvme-lightnvm.o fabrics.o plugin.o \
-	nvme-status.o nvme-topology.o
+	nvme-topology.o
 
 UTIL_OBJS := util/argconfig.o util/suffix.o util/json.o 
 
