@@ -1,3 +1,7 @@
+NAME=libnvme
+SPECFILE=$(NAME).spec
+VERSION=$(shell awk '/Version:/ { print $$2 }' $(SPECFILE))
+
 prefix ?= /usr
 includedir ?= $(prefix)/include
 libdir ?= $(prefix)/lib
@@ -9,12 +13,25 @@ L_CFLAGS=$(CFLAGS)
 LINK_FLAGS=
 LINK_FLAGS+=$(LDFLAGS)
 ENABLE_SHARED ?= 1
+SED ?= sed
+INSTALL ?= install
 
-soname=libnvme.so.1
+soname=$(NAME).so.1
 minor=0
 micro=1
 libname=$(soname).$(minor).$(micro)
-all_targets += libnvme.a
+all_targets += $(NAME).a
+
+SED_PROCESS = \
+	$(SED) -e "s%@prefix@%$(prefix)%g" \
+               -e "s%@libdir@%$(libdir)%g" \
+               -e "s%@includedir@%$(includedir)%g" \
+               -e "s%@NAME@%$(NAME)%g" \
+               -e "s%@VERSION@%$(VERSION)%g" \
+               $< >$@
+
+%.pc: %.pc.in Makefile
+	$(SED_PROCESS)
 
 ifeq ($(ENABLE_SHARED),1)
 all_targets += $(libname)
@@ -32,7 +49,6 @@ endif
 all: $(all_targets)
 
 libnvme_srcs := nvme/ioctl.c nvme/fabrics.c nvme/filters.c
-
 libnvme_objs := $(patsubst %.c,%.ol,$(libnvme_srcs))
 libnvme_sobjs := $(patsubst %.c,%.os,$(libnvme_srcs))
 
@@ -54,15 +70,16 @@ libnvme.a: $(libnvme_objs)
 $(libname): $(libnvme_sobjs) libnvme.map
 	$(QUIET_CC)$(CC) $(SO_CFLAGS) -Wl,--version-script=libnvme.map -Wl,-soname=$(soname) -o $@ $(libnvme_sobjs) $(LINK_FLAGS)
 
-install: $(all_targets)
-	install -D -m 644 nvme/nvme.h $(includedir)/nvme/nvme.h
-	install -D -m 644 nvme/ioctl.h $(includedir)/nvme/ioctl.h
-	install -D -m 644 nvme/fabrics.h $(includedir)/nvme/fabrics.h
-	install -D -m 644 nvme/filters.h $(includedir)/nvme/filters.h
-	install -D -m 644 libnvme.h $(includedir)/libnvme.h
-	install -D -m 644 libnvme.a $(libdir)/libnvme.a
+install: $(all_targets) $(NAME).pc
+	$(INSTALL) -D -m 644 nvme/nvme.h $(includedir)/nvme/nvme.h
+	$(INSTALL) -D -m 644 nvme/ioctl.h $(includedir)/nvme/ioctl.h
+	$(INSTALL) -D -m 644 nvme/fabrics.h $(includedir)/nvme/fabrics.h
+	$(INSTALL) -D -m 644 nvme/filters.h $(includedir)/nvme/filters.h
+	$(INSTALL) -D -m 644 libnvme.h $(includedir)/libnvme.h
+	$(INSTALL) -D -m 644 libnvme.a $(libdir)/libnvme.a
+	$(INSTALL) -D -m 644 $(NAME).pc $(DESTDIR)$(libdir)/pkgconfig/$(NAME).pc
 ifeq ($(ENABLE_SHARED),1)
-	install -D -m 755 $(libname) $(libdir)/$(libname)
+	$(INSTALL) -D -m 755 $(libname) $(libdir)/$(libname)
 	ln -sf $(libname) $(libdir)/$(soname)
 	ln -sf $(libname) $(libdir)/libnvme.so
 endif
@@ -70,6 +87,5 @@ endif
 $(libnvme_objs): libnvme.h
 
 clean:
-	rm -f $(all_targets) $(libnvme_objs) $(libnvme_sobjs) $(soname).new
+	rm -f $(all_targets) $(libnvme_objs) $(libnvme_sobjs) $(soname).new $(NAME).pc
 	rm -f *.so* *.a *.o
-
