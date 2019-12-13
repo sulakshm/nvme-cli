@@ -7,7 +7,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
-#include "nvme-models.h"
+#include "models.h"
 
 static char *_fmt1 = "/sys/class/nvme/nvme%d/device/subsystem_vendor";
 static char *_fmt2 = "/sys/class/nvme/nvme%d/device/subsystem_device";
@@ -27,8 +27,6 @@ static char *device_final;
 static char *class_top;
 static char *class_mid;
 static char *class_final;
-
-
 
 static void free_all(void)
 {

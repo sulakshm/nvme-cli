@@ -19,5 +19,6 @@
 #include "nvme/ioctl.h"
 #include "nvme/fabrics.h"
 #include "nvme/filters.h"
+#include "nvme/models.h"
 
 #endif /* _LINUX_NVME_H */
