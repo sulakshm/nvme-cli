@@ -16,6 +16,7 @@ UDEVDIR ?= $(SYSCONFDIR)/udev
 DRACUTDIR ?= $(LIBDIR)/dracut
 LIB_DEPENDS =
 LDFLAGS = -Llib -lnvme
+INC=-Iutil
 
 ifeq ($(LIBUUID),0)
 	override LDFLAGS += -luuid
@@ -28,8 +29,6 @@ ifeq ($(LIBHUGETLBFS),0)
 	override CFLAGS += -DLIBHUGETLBFS
 	override LIB_DEPENDS += hugetlbfs
 endif
-
-INC=-Iutil
 
 ifeq ($(HAVE_SYSTEMD),0)
 	override LDFLAGS += -lsystemd
