@@ -51,8 +51,7 @@ override CFLAGS += -DNVME_VERSION='"$(NVME_VERSION)"'
 
 NVME_DPKG_VERSION=1~`lsb_release -sc`
 
-OBJS := nvme-print.o nvme-lightnvm.o fabrics.o plugin.o \
-	nvme-topology.o
+OBJS := print.o lightnvm.o fabrics.o plugin.o topology.o
 
 UTIL_OBJS := util/argconfig.o util/suffix.o util/json.o 
 
@@ -80,13 +79,13 @@ libnvme:
 verify-no-dep: nvme.c nvme.h $(OBJS) NVME-VERSION-FILE
 	$(CC) $(CPPFLAGS) $(CFLAGS) nvme.c -o $@ $(OBJS) $(LDFLAGS)
 
-nvme.o: nvme.c nvme.h nvme-print.h util/argconfig.h util/suffix.h nvme-lightnvm.h fabrics.h
+nvme.o: nvme.c nvme.h print.h util/argconfig.h util/suffix.h lightnvm.h fabrics.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(INC) -c $<
 
-%.o: %.c %.h nvme.h nvme-print.h util/argconfig.h libnvme
+%.o: %.c %.h nvme.h print.h util/argconfig.h libnvme
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(INC) -o $@ -c $<
 
-%.o: %.c nvme.h nvme-print.h util/argconfig.h libnvme
+%.o: %.c nvme.h print.h util/argconfig.h libnvme
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(INC) -o $@ -c $<
 
 doc: $(NVME)

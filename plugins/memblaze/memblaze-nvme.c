@@ -5,9 +5,8 @@
 #include <unistd.h>
 
 #include "nvme.h"
-#include "nvme-print.h"
+#include "print.h"
 #include "plugin.h"
-
 #include "argconfig.h"
 #include "suffix.h"
 

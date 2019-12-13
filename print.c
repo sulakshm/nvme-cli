@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include "nvme-print.h"
+#include "print.h"
 #include "util/json.h"
 #include "util/suffix.h"
 #include "common.h"

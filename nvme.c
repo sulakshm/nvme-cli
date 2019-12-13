@@ -51,15 +51,15 @@
 
 #include "common.h"
 #include "nvme.h"
-#include "nvme-print.h"
-#include "nvme-lightnvm.h"
+#include "print.h"
+#include "lightnvm.h"
 #include "plugin.h"
 
 #include "argconfig.h"
 #include "fabrics.h"
 
 #define CREATE_CMD
-#include "nvme-builtin.h"
+#include "builtin.h"
 
 static struct stat nvme_stat;
 const char *devicename;

@@ -4,11 +4,9 @@
 #include <unistd.h>
 
 #include "nvme.h"
-#include "nvme-print.h"
+#include "print.h"
 #include "plugin.h"
-
-#include "nvme-lightnvm.h"
-
+#include "lightnvm.h"
 #include "argconfig.h"
 #include "suffix.h"
 
