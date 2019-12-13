@@ -12,7 +12,7 @@ ENABLE_SHARED ?= 1
 
 soname=libnvme.so.1
 minor=0
-micro=2
+micro=1
 libname=$(soname).$(minor).$(micro)
 all_targets += libnvme.a
 
