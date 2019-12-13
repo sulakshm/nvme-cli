@@ -243,7 +243,7 @@ static int add_argument(char **argstr, char *tok, char *arg)
 	return 0;
 }
 
-int build_options(char **argstr, struct fabrics_config *cfg, bool discover)
+int nvme_fabrics_build_options(char **argstr, struct fabrics_config *cfg, bool discover)
 {
 	if (!cfg->transport) {
 		fprintf(stderr, "transport not specified\n");
@@ -286,7 +286,7 @@ int build_options(char **argstr, struct fabrics_config *cfg, bool discover)
 	return 0;
 }
 
-int add_ctrl(const char *argstr)
+int nvme_fabrics_add_ctrl(const char *argstr)
 {
 	substring_t args[MAX_OPT_ARGS];
 	char buf[BUF_SIZE], *options, *p;

@@ -714,13 +714,13 @@ retry:
 	cfg.transport = (char *)transport;
 	cfg.nqn = e->subnqn;
 
-	if (build_options(&argstr, &cfg, discover))
+	if (nvme_fabrics_build_options(&argstr, &cfg, discover))
 		return -ENOMEM;
 
 	if (discover)
 		ret = do_discover(argstr, true);
 	else
-		ret = add_ctrl(argstr);
+		ret = nvme_fabrics_add_ctrl(argstr);
 
 	free(argstr);
 	if (ret == -EINVAL && e->treq & NVMF_TREQ_DISABLE_SQFLOW) {
@@ -807,7 +807,7 @@ static int do_discover(char *argstr, bool connect)
 	if (cfg.device)
 		instance = ctrl_instance(cfg.device);
 	else
-		instance = add_ctrl(argstr);
+		instance = nvme_fabrics_add_ctrl(argstr);
 
 	if (instance < 0)
 		return instance;
@@ -869,7 +869,7 @@ static int fabrics_build_options(char **argstr, bool discover)
 		nvmf_hostnqn_file();
 	if (!cfg.hostid)
 		nvmf_hostid_file();
-	return build_options(argstr, &cfg, discover);
+	return nvme_fabrics_build_options(argstr, &cfg, discover);
 }
 
 static int discover_from_conf_file(const char *desc,
@@ -1044,7 +1044,7 @@ int connect(const char *desc, int argc, char **argv)
 	if (ret)
 		goto out;
 
-	instance = add_ctrl(argstr);
+	instance = nvme_fabrics_add_ctrl(argstr);
 	if (instance < 0)
 		ret = instance;
 	free(argstr);

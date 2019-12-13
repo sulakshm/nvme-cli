@@ -65,6 +65,13 @@
 		nvme_reset_controller;
 		nvme_ns_rescan;
 		nvme_get_nsid;
+		nvme_fabrics_add_ctrl;
+		nvme_fabrics_build_options;
+		nvme_scan_namespace_filter;
+		nvme_scan_paths_filter;
+		nvme_scan_ctrls_filter;
+		nvme_scan_subsys_filter;
+		nvme_scan_dev_instance_namespaces;
 	local:
 		*;
 };

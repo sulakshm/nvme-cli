@@ -30,7 +30,7 @@ struct fabrics_config {
 	int  data_digest;
 };
 
-int add_ctrl(const char *argstr);
-int build_options(char **argstr, struct fabrics_config *cfg, bool discover);
+int nvme_fabrics_add_ctrl(const char *argstr);
+int nvme_fabrics_build_options(char **argstr, struct fabrics_config *cfg, bool discover);
 
 #endif
