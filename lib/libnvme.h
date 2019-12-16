@@ -21,5 +21,6 @@
 #include "nvme/filters.h"
 #include "nvme/models.h"
 #include "nvme/status.h"
+#include "nvme/json.h"
 
 #endif /* _LINUX_NVME_H */

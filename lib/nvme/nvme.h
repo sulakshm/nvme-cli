@@ -7,13 +7,7 @@
 
 #include <linux/types.h>
 
-#ifdef LIBUUID
 #include <uuid/uuid.h>
-#else
-typedef struct {
-	uint8_t b[16];
-} uuid_t;
-#endif
 
 #ifdef __CHECKER__
 #define __force       __attribute__((force))
@@ -187,7 +181,8 @@ struct nvme_id_power_state {
 	__u8			rsvd19;
 	__le16			active_power;
 	__u8			active_work_scale;
-	__u8			rsvd23[9];
+	__u8			active_power_scale;
+	__u8			rsvd23[8];
 };
 
 /* idle and active power scales occupy the last 2 bits of the field */

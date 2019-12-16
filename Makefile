@@ -1,4 +1,4 @@
-CFLAGS ?= -O2 -g -Wall -Werror -include config-host.h
+CFLAGS ?= -O2 -g -Wall -Werror -include config-host.h -I/usr/include/json-c -ljson-c
 override CFLAGS += -std=gnu99 -I.
 override CPPFLAGS += -D_GNU_SOURCE -D__CHECK_ENDIAN__
 NVME = nvme
@@ -42,7 +42,7 @@ override CFLAGS += -DNVME_VERSION='"$(NVME_VERSION)"'
 
 NVME_DPKG_VERSION=1~`lsb_release -sc`
 
-OBJS := print.o lightnvm.o fabrics.o plugin.o topology.o
+OBJS := print.o lightnvm.o fabrics.o plugin.o topology.o json.o
 
 UTIL_OBJS := util/argconfig.o util/suffix.o util/json.o 
 

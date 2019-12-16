@@ -647,18 +647,6 @@ static double calc_percent(uint64_t numerator, uint64_t denominator)
 		(uint64_t)(((double)numerator / (double)denominator) * 100) : 0;
 }
 
-static long double int128_to_double(__u8 *data)
-{
-	int i;
-	long double result = 0;
-
-	for (i = 0; i < 16; i++) {
-		result *= 256;
-		result += data[15 - i];
-	}
-	return result;
-}
-
 static int wdc_get_pci_ids(uint32_t *device_id, uint32_t *vendor_id)
 {
 	int fd, ret = -1;

@@ -27,14 +27,6 @@
 
 #define NVME_IOCTL_TIMEOUT 120000
 
-enum nvme_print_flags {
-	NORMAL	= 0,
-	VERBOSE	= 1 << 0,	/* verbosely decode complex values for humans */
-	JSON	= 1 << 1,	/* display in json format */
-	VS	= 1 << 2,	/* hex dump vendor specific data areas */
-	BINARY	= 1 << 3,	/* binary dump raw bytes */
-};
-
 struct nvme_subsystem;
 struct nvme_ctrl;
 

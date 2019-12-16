@@ -112,8 +112,8 @@ static void show_option(const struct argconfig_commandline_options *option)
 
 	fprintf(stderr, "%s", buffer);
 	if (option->help) {
-		print_word_wrapped("--- ", 40, b - buffer);
-		print_word_wrapped(option->help, 44, 44);
+		print_word_wrapped(": ", 40, b - buffer);
+		print_word_wrapped(option->help, 42, 42);
 	}
 	fprintf(stderr, "\n");
 }

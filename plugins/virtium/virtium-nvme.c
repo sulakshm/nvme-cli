@@ -51,18 +51,6 @@ struct vtview_save_log_settings {
 	const char*	test_name;
 };
 
-static long double int128_to_double(__u8 *data)
-{
-	int i;
-	long double result = 0;
-
-	for (i = 0; i < 16; i++) {
-		result *= 256;
-		result += data[15 - i];
-	}
-	return result;
-}
-
 static void vt_initialize_header_buffer(struct vtview_log_header *pbuff)
 {
 	memset(pbuff->path, 0, sizeof(pbuff->path));

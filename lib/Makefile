@@ -6,7 +6,7 @@ prefix ?= /usr
 includedir ?= $(prefix)/include
 libdir ?= $(prefix)/lib
 
-CFLAGS ?= -g -fomit-frame-pointer -O2
+CFLAGS ?= -g -fomit-frame-pointer -O2 -I/usr/include/json-c -ljson-c
 override CFLAGS += -Wall -fPIC -Iinclude/
 SO_CFLAGS=-shared $(CFLAGS)
 L_CFLAGS=$(CFLAGS)
@@ -48,7 +48,7 @@ endif
 
 all: $(all_targets)
 
-libnvme_srcs := nvme/ioctl.c nvme/fabrics.c nvme/filters.c nvme/models.c nvme/status.c
+libnvme_srcs := nvme/ioctl.c nvme/fabrics.c nvme/filters.c nvme/models.c nvme/status.c nvme/json.c
 libnvme_objs := $(patsubst %.c,%.ol,$(libnvme_srcs))
 libnvme_sobjs := $(patsubst %.c,%.os,$(libnvme_srcs))
 

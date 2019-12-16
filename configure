@@ -180,6 +180,15 @@ fi
 print_config "havesystemd" "${havesystemd}"
 
 ##########################################
+# check for json-c
+json_output="no"
+pkg-config --exists "json-c"
+if [ $? -eq 0 ]; then
+	json_output="yes"
+fi
+print_config "json_output" "${json_output}"
+
+##########################################
 # check for libhugetlbfs
 libhugetlbfs="no"
 ${ld} -o /dev/null -lhugetlbfs >/dev/null 2>&1

@@ -1,3 +1,6 @@
+#ifndef _NVME_STATUS_H
+#define _NVME_STATUS_H
+
 #include <linux/types.h>
 #include <stdbool.h>
 
@@ -20,3 +23,5 @@ static inline __u8 nvme_status_type(__u16 status)
  * Notes: This function will convert a given status to an errno
  */
 __u8 nvme_status_to_errno(int status, bool fabrics);
+
+#endif /* _NVME_STATUS_H */
