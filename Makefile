@@ -1,9 +1,6 @@
-CFLAGS ?= -O2 -g -Wall -Werror
+CFLAGS ?= -O2 -g -Wall -Werror -include config-host.h
 override CFLAGS += -std=gnu99 -I.
 override CPPFLAGS += -D_GNU_SOURCE -D__CHECK_ENDIAN__
-LIBUUID = $(shell $(LD) -o /dev/null -luuid >/dev/null 2>&1; echo $$?)
-LIBHUGETLBFS = $(shell $(LD) -o /dev/null -lhugetlbfs >/dev/null 2>&1; echo $$?)
-HAVE_SYSTEMD = $(shell pkg-config --exists systemd  --atleast-version=232; echo $$?)
 NVME = nvme
 INSTALL ?= install
 DESTDIR =
@@ -17,31 +14,25 @@ DRACUTDIR ?= $(LIBDIR)/dracut
 LIB_DEPENDS =
 LDFLAGS = -Llib -lnvme
 INC=-Iutil
-
-ifeq ($(LIBUUID),0)
-	override LDFLAGS += -luuid
-	override CFLAGS += -DLIBUUID
-	override LIB_DEPENDS += uuid
-endif
-
-ifeq ($(LIBHUGETLBFS),0)
-	override LDFLAGS += -lhugetlbfs
-	override CFLAGS += -DLIBHUGETLBFS
-	override LIB_DEPENDS += hugetlbfs
-endif
-
-ifeq ($(HAVE_SYSTEMD),0)
-	override LDFLAGS += -lsystemd
-	override CFLAGS += -DHAVE_SYSTEMD
-endif
-
 RPMBUILD = rpmbuild
 TAR = tar
 RM = rm -f
-
 AUTHOR=Keith Busch <kbusch@kernel.org>
 
 default: $(NVME)
+
+config-host.mak: configure
+	@if [ ! -e "$@" ]; then					\
+	  echo "Running configure ...";				\
+	  ./configure;						\
+	else							\
+	  echo "$@ is out-of-date, running configure";		\
+	  sed -n "/.*Configured with/s/[^:]*: //p" "$@" | sh;	\
+	fi
+
+ifneq ($(MAKECMDGOALS),clean)
+include config-host.mak
+endif
 
 NVME-VERSION-FILE: FORCE
 	@$(SHELL_PATH) ./NVME-VERSION-GEN
@@ -70,7 +61,7 @@ PLUGIN_OBJS :=					\
 	plugins/shannon/shannon-nvme.o		\
 	plugins/dera/dera-nvme.o
 
-nvme: nvme.c nvme.h $(OBJS) $(PLUGIN_OBJS) $(UTIL_OBJS) NVME-VERSION-FILE libnvme
+nvme: nvme.c nvme.h $(OBJS) $(PLUGIN_OBJS) $(UTIL_OBJS) NVME-VERSION-FILE libnvme config-host.mak
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(INC) nvme.c -o $(NVME) $(OBJS) $(PLUGIN_OBJS) $(UTIL_OBJS) $(LDFLAGS)
 
 libnvme:
@@ -97,7 +88,7 @@ test:
 all: doc
 
 clean:
-	$(RM) $(NVME) $(OBJS) $(PLUGIN_OBJS) $(UTIL_OBJS) *~ a.out NVME-VERSION-FILE *.tar* nvme.spec version control nvme-*.deb
+	$(RM) $(NVME) $(OBJS) $(PLUGIN_OBJS) $(UTIL_OBJS) *~ a.out NVME-VERSION-FILE *.tar* nvme.spec version control nvme-*.deb config-host.mak config-host.h
 	$(MAKE) -C Documentation clean
 	$(MAKE) -C lib clean
 	$(RM) tests/*.pyc
